@@ -32,6 +32,7 @@ Fases del cargador (`Scripts/loader/run.py`): `base` (SQL 00-01) → `cargas` (A
 .\montar.ps1               # levanta base y visor desde el respaldo final
 .\montar.ps1 -Limpiar      # borra el volumen y restaura de nuevo
 .\montar.ps1 -Regenerar    # ademas descarga, modela, analiza y exporta (horas)
+.\montar.ps1 -Desmontar    # elimina contenedores, volumenes e imagenes; solo queda el codigo (-Forzar no pregunta)
 ```
 
 ## Estructura

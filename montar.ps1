@@ -7,6 +7,8 @@
   -Regenerar     vuelve a descargar las fuentes, reconstruye el modelo, corre el analisis y exporta el visor (horas).
   -Limpiar       borra el volumen de la base antes de montar (fuerza restaurar de nuevo el respaldo).
   -SinNavegador  no abre el visor al terminar.
+  -Desmontar     elimina contenedores, volumenes (base y cache GTFS), redes e imagenes del proyecto; solo queda el codigo.
+  -Forzar        con -Desmontar, no pide confirmacion.
   -Motor         fuerza 'docker' o 'podman' (por defecto usa el que encuentre, Docker primero).
 .EXAMPLE
   .\montar.ps1
@@ -18,6 +20,8 @@ param(
     [switch]$Regenerar,
     [switch]$Limpiar,
     [switch]$SinNavegador,
+    [switch]$Desmontar,
+    [switch]$Forzar,
     [ValidateSet('', 'docker', 'podman')][string]$Motor = ''
 )
 
@@ -82,6 +86,21 @@ function Iniciar-DockerDesktop {
 Paso 'Buscando Docker o Podman'
 Agregar-RutaDocker
 $motor = $Motor
+if ($Desmontar) {
+    if (-not $motor) { $motor = if (Get-Command docker -ErrorAction SilentlyContinue) { 'docker' } elseif (Get-Command podman -ErrorAction SilentlyContinue) { 'podman' } else { '' } }
+    if (-not $motor -or -not (Get-Command $motor -ErrorAction SilentlyContinue) -or -not (Motor-Responde $motor)) {
+        Write-Host 'No hay un motor de contenedores en ejecucion: no hay nada que eliminar.'
+        exit 0
+    }
+    Write-Host "Se eliminaran con $motor : contenedores, volumenes (base de datos y cache del GTFS), redes e imagenes de este proyecto."
+    Write-Host 'Se conservan el codigo, Backup/ y SIG/data. Docker/Podman no se desinstala.'
+    if (-not $Forzar -and (Read-Host 'Escriba SI para continuar') -ne 'SI') { Write-Host 'Cancelado.'; exit 0 }
+    Paso 'Desmontando'
+    & $motor compose --profile etl down -v --rmi all --remove-orphans
+    if ($LASTEXITCODE -ne 0) { throw "Fallo al desmontar (codigo $LASTEXITCODE)" }
+    Write-Host "`nListo: solo queda el codigo. Para volver a montar: .\montar.ps1" -ForegroundColor Green
+    exit 0
+}
 if (-not $motor) {
     if (Get-Command docker -ErrorAction SilentlyContinue) { $motor = 'docker' }
     elseif (Get-Command podman -ErrorAction SilentlyContinue) { $motor = 'podman' }
