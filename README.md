@@ -104,6 +104,7 @@ Detalle y estado en `DATOS_NECESARIOS.md`; el catálogo completo, con fechas y l
 - **Relatividad:** ICA e IPT dependen de la normalización min-max de la zona y no son comparables con otra zona.
 - **Sensibilidad:** aún no se ejecutaron escenarios con otros pesos o umbrales (el modelo lo permite con nuevas filas en `analisis.escenario`).
 - **Red:** el esquema trae `via_id` en `arista_red` sin llenar (la red sale de andenes y conexiones, no de la malla vial) y `anden.ancho` sin dato.
+- **Topología (validada en `analisis.v_calidad`):** Catastro entrega 39 «lotes» de vía y espacio público (sufijo 090–099, destino 65, sin construcción; 36 invaden la malla vial). Se marcan `territorio.lote.tipo = 'via_espacio_publico'` y no son predios del análisis ni salen en el visor. Los extremos sueltos de la red de andenes a ≤ 2 m de otra arista se unen automáticamente (en el script 06); quedan 27 por revisar. Persisten 2 lotes prediales que una línea de la malla vial cruza (inconsistencia de la fuente, p. ej. el lote industrial `004307021003`), ~780 microaristas (< 5 cm) heredadas de los ejes de andén (no afectan los costos) y 216 lotes que se solapan 3 134 m² con andenes.
 - **LADM-COL:** solo correspondencias propuestas, por verificar contra el catálogo oficial (Modelo Extendido Catastro-Registro v4.1; Modelo Núcleo v4.0.1).
 - **API del buscador de rutas de TransMilenio:** responde 403; no se usa.
 - **Tablas heredadas:** el backup original trae procedimientos que descargaban con la extensión `http`; el cargador nuevo usa Python.

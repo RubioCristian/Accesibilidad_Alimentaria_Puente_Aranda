@@ -33,7 +33,7 @@ CAPAS = {
                'ica_base', b.ica, 'ipt_base', b.ipt, 'ica_obras', o.ica, 'ipt_obras', o.ipt),
                {G.format('ST_SimplifyPreserveTopology(l.geom, 0.3)')}
         FROM territorio.lote l
-        JOIN territorio.manzana m ON m.id = l.manzana_id
+        JOIN territorio.manzana m ON m.id = l.manzana_id AND l.tipo = 'predial'
         LEFT JOIN res ON res.lote_id = l.id
         LEFT JOIN uso ON uso.lote_id = l.id
         LEFT JOIN social.estrato es ON es.manzana_id = m.id

@@ -31,6 +31,7 @@ CREATE TABLE territorio.lote (
   fuente_id         int REFERENCES crudo.fuente_dato(id),
   fecha_observacion date,
   fecha_carga       date,
+  tipo              text NOT NULL DEFAULT 'predial' CHECK (tipo IN ('predial', 'via_espacio_publico')),
   geom              geometry(MultiPolygon, 9377) NOT NULL CHECK (ST_IsValid(geom))
 );
 INSERT INTO territorio.lote (codigo, manzana_id, fuente_id, fecha_carga, geom)
@@ -38,6 +39,16 @@ SELECT l.codigo_lote, m.id, (SELECT id FROM crudo.fuente_dato WHERE nombre = 'Ca
        (SELECT fecha_descarga FROM crudo.fuente_dato WHERE nombre = 'Catastro - Lote'),
        ST_Multi(ST_MakeValid(l.geom))
 FROM crudo.legado_lotes l JOIN territorio.manzana m ON m.codigo = l.codigo_manzana;
+
+-- Lotes que no son predios: Catastro entrega "lotes" de via y espacio publico (codigo 09x, destino 65, sin
+-- construccion). Se detectan porque quedan fuera de su manzana (mas de la mitad de su area) o, en las esquinas
+-- que si quedan dentro, por el sufijo 090-099 del codigo. Regla empirica verificada en la zona cargada:
+-- los 39 lotes 09x tienen destino 65 y ninguna construccion. No entran al analisis.
+UPDATE territorio.lote l SET tipo = 'via_espacio_publico'
+FROM territorio.manzana m
+WHERE m.id = l.manzana_id
+  AND (ST_Area(ST_Difference(l.geom, m.geom)) > 0.5 * ST_Area(l.geom)
+       OR substr(l.codigo, 10, 3) BETWEEN '090' AND '099');
 
 -- Predio = CHIP. La tabla de Catastro trae una fila por unidad calificada, asi que se agrupa.
 CREATE TABLE territorio.predio (
