@@ -24,6 +24,14 @@ podman compose --profile etl run --rm etl python -m Scripts.loader.run modelo an
 
 Fases del cargador (`Scripts/loader/run.py`): `base` (SQL 00-01) → `cargas` (ArcGIS y GTFS) → `modelo` (SQL 02-10) → `analisis` (un `analisis.ejecutar` por escenario) → `exportar` (GeoJSON y `resumen.json` en `SIG/data`). Los SQL son re-ejecutables sobre la base restaurada de cualquiera de los dos respaldos ; el cargador descarga el GTFS (120 MB) a un volumen de caché y no lo versiona. La fase `cargas` baja la localidad completa (lotes por manzana, malla vial por caja, predios por CHIP, OSM por teselas) y es reanudable; tarda del orden de una hora. El análisis de los dos escenarios tarda ~36 min. Desde el backup original ya no basta con `modelo`: hay que correr antes `cargas`, porque el original solo trae una zona de 76 manzanas.
 
+### Montar todo con un solo comando (PowerShell)
+
+```powershell
+.montar.ps1               # levanta base y visor desde el respaldo final
+.montar.ps1 -Limpiar      # borra el volumen y restaura de nuevo
+.montar.ps1 -Regenerar    # ademas descarga, modela, analiza y exporta (horas)
+```
+
 ## Estructura
 
 ```
