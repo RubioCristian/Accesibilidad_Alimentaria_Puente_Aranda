@@ -1,6 +1,6 @@
 # Datos necesarios para completar la base de datos
 
-Actualizado el 2026-11-05. Estado verificado consultando los servicios en vivo (no se consultó la base de datos). Requisitos: `Taller 10 - Bases de Datos Espaciales.pdf` y el ER en `taller10/diagramas`.
+Actualizado el 2026-11-05. Estado verificado consultando los servicios en vivo. **Cargado en la base** (zona de 76 manzanas): predio, estrato, obras y GTFS; ver `README.md`. Requisitos: `Taller 10 - Bases de Datos Espaciales.pdf` y el ER en `taller10/diagramas`.
 
 Para cada dato registrar en la bitácora: **organización, URL, licencia, fecha de descarga, cobertura, escala y limitaciones** (columnas de `crudo.fuente_dato`).
 
@@ -27,7 +27,7 @@ Base Catastro: `https://serviciosgis.catastrobogota.gov.co/arcgis/rest/services/
 
 | # | Dato | Estado | Dónde buscar | Notas |
 |---|------|--------|--------------|-------|
-| 2.1 | **Población y hogares por manzana** | ❌ | DANE, CNPV 2018 + Marco Geoestadístico Nacional (MGN): <https://microdatos.dane.gov.co/index.php/catalog/643/related-materials> | El DANE anonimiza: algunas variables **no se publican a nivel manzana** y quedan agregadas en el nivel siguiente. Confirmar en el catálogo 643 cuál es el nivel mínimo disponible para Bogotá |
+| 2.1 | **Población y hogares por manzana** | ⚠️ Resuelto como supuesto: demanda inferida por predio (`social.demanda_predio`), sin tamaño de hogar | DANE, CNPV 2018 + Marco Geoestadístico Nacional (MGN): <https://microdatos.dane.gov.co/index.php/catalog/643/related-materials> | El DANE anonimiza: algunas variables **no se publican a nivel manzana** y quedan agregadas en el nivel siguiente. Confirmar en el catálogo 643 cuál es el nivel mínimo disponible para Bogotá |
 | 2.2 | Población por localidad o UPZ (respaldo) | ⚠️ | Datos de desarrollo económico de Catastro (2017) | Solo 20 registros (por localidad). Sirve como contexto, no como demanda |
 | 2.3 | **Vulnerabilidad social** | ❌ | DANE (Encuesta Multipropósito Bogotá, NBI), Secretaría Distrital de Planeación | Probablemente a nivel UPZ o localidad. Definir con qué variables |
 
@@ -64,7 +64,7 @@ Base Catastro: `https://serviciosgis.catastrobogota.gov.co/arcgis/rest/services/
 | 4.6 | Rutas troncales | ✅ | `.../Troncal/consulta_rutas_troncales/MapServer/0` | |
 | 4.7 | Paraderos SITP | ✅ | `.../Zonal/consulta_paraderos_zonales/MapServer/0` | |
 | 4.8 | Rutas zonales SITP | ✅ | `.../Zonal/consulta_rutas_zonales/MapServer/0` | |
-| 4.9 | **Relación ruta–estación/paradero y orden** | ❌ | GTFS estático de TransMilenio/SITP (paradas, rutas, viajes, horarios) | Hay copias en Tumi Data (2020–2022) y se publica en datos abiertos de Movilidad Bogotá y datos.gov.co. Buscar la versión más reciente y verificar licencia. Alternativa: derivar por cercanía espacial |
+| 4.9 | **Relación ruta–estación/paradero y orden** | ✅ GTFS 2026-04-29 cargado (`crudo.gtfs_*`, `movilidad.ruta_estacion_*`) | GTFS estático de TransMilenio/SITP (paradas, rutas, viajes, horarios) | Hay copias en Tumi Data (2020–2022) y se publica en datos abiertos de Movilidad Bogotá y datos.gov.co. Buscar la versión más reciente y verificar licencia. Alternativa: derivar por cercanía espacial |
 | 4.10 | Obras | ✅ | `gestionpublica/obraspublicas/MapServer/0` | Multipunto. `LOCALIDAD=16`: 90 obras. `ESTADO`: 1 en ejecución, 2 ejecutado, 3 lo que viene |
 | 4.11 | Capas del visor de TransMilenio | ✅ | `https://services5.arcgis.com/9unqgkQ8KCOfnzoB/arcgis/rest/services/Mapa_GeoVisor_TransmiGIS/FeatureServer` | Biciestaciones (12), trazado troncal (5), metro (6, 8), cable (11, 14), zonas SITP (18). Solo se probaron las capas 6 y 8 |
 | 4.12 | API interna del buscador de rutas | ⚠️ | `api.buscador-rutas.transmilenio.gov.co` | Responde 403 (no pública). No usar sin autorización |

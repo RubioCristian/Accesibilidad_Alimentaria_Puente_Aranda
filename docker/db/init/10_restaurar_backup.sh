@@ -1,9 +1,10 @@
 #!/bin/bash
-# Se ejecuta solo la primera vez (volumen vacio). Restaura la base de partida.
+# Se ejecuta solo la primera vez (volumen vacio). Restaura el respaldo final y, si no existe, el original.
 set -u
-BACKUP=/backup/alimentos_puente_aranda_original.backup
+BACKUP=/backup/alimentos_puente_aranda_final.backup
+[ -f "$BACKUP" ] || BACKUP=/backup/alimentos_puente_aranda_original.backup
 if [ ! -f "$BACKUP" ]; then
-  echo "[init] No hay backup en $BACKUP; se crea la base vacia."
+  echo "[init] No hay backup en /backup; se crea la base vacia."
   exit 0
 fi
 echo "[init] Restaurando $BACKUP en $POSTGRES_DB ..."

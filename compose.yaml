@@ -47,6 +47,7 @@ services:
       PGUSER: postgres
       PGPASSWORD: ${POSTGRES_PASSWORD:-postgres}
       PGDATABASE: alimentos_puente_aranda
+      CODE_VERSION: ${CODE_VERSION:-sin-version}
     volumes:
       - ./Scripts:/app/Scripts:ro,Z
       - ./SIG:/app/SIG:Z

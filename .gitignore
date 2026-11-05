@@ -3,5 +3,3 @@ __pycache__/
 .env
 cache/
 *.zip
-SIG/data/*.geojson
-!SIG/data/.gitkeep

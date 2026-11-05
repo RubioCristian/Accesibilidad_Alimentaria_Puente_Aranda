@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Visor - Accesibilidad alimentaria, Puente Aranda</title>
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
+<link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+<aside id="panel">
+  <header>
+    <h1>Accesibilidad alimentaria</h1>
+    <p>Puente Aranda, Bogot&aacute; &middot; unidad de an&aacute;lisis: predio</p>
+  </header>
+  <nav id="pestanas">
+    <button data-tab="capas" class="activa">Capas</button>
+    <button data-tab="calidad">Calidad</button>
+    <button data-tab="fuentes">Fuentes</button>
+    <button data-tab="limites">L&iacute;mites</button>
+  </nav>
+
+  <section id="tab-capas" class="tab activa">
+    <h2>Escenario</h2>
+    <div class="grupo" id="escenarios">
+      <label><input type="radio" name="escenario" value="base" checked> Base (sin obras)</label>
+      <label><input type="radio" name="escenario" value="obras"> Con obras en ejecuci&oacute;n</label>
+    </div>
+
+    <h2>Colorear lotes por</h2>
+    <div class="grupo" id="modos">
+      <label><input type="radio" name="modo" value="ica" checked> ICA &middot; calidad de acceso (0&ndash;100)</label>
+      <label><input type="radio" name="modo" value="ipt"> IPT &middot; prioridad territorial (0&ndash;100)</label>
+      <label><input type="radio" name="modo" value="uso"> Uso predominante</label>
+      <label><input type="radio" name="modo" value="estrato"> Estrato</label>
+      <label><input type="radio" name="modo" value="demanda"> Demanda asumida (inferida)</label>
+    </div>
+    <div id="leyenda"></div>
+
+    <h2>Capas</h2>
+    <div class="grupo" id="lista-capas"></div>
+    <label class="base"><input type="checkbox" id="mapa-base" checked> Mapa base (OpenStreetMap, requiere internet)</label>
+  </section>
+
+  <section id="tab-calidad" class="tab">
+    <h2>Pruebas de calidad</h2>
+    <p class="nota">Cada prueba cuenta casos con problema; 0 es lo esperado. Los faltantes se informan, no se rellenan.</p>
+    <table id="t-calidad"></table>
+    <h2>Contenido de la base</h2>
+    <table id="t-tablas"></table>
+    <h2>Ejecuciones</h2>
+    <table id="t-ejec"></table>
+  </section>
+
+  <section id="tab-fuentes" class="tab">
+    <h2>Cat&aacute;logo de fuentes</h2>
+    <div id="fuentes"></div>
+  </section>
+
+  <section id="tab-limites" class="tab">
+    <h2>Lo que este visor no muestra</h2>
+    <ul id="limites"></ul>
+  </section>
+
+  <footer><span id="generado"></span></footer>
+</aside>
+<main>
+  <div id="mapa"></div>
+  <div id="aviso" hidden></div>
+</main>
+<script src="vendor/maplibre-gl.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
