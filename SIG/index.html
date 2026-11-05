@@ -15,6 +15,7 @@
   </header>
   <nav id="pestanas">
     <button data-tab="capas" class="activa">Capas</button>
+    <button data-tab="predio">Predio</button>
     <button data-tab="calidad">Calidad</button>
     <button data-tab="fuentes">Fuentes</button>
     <button data-tab="limites">L&iacute;mites</button>
@@ -40,6 +41,20 @@
     <h2>Capas</h2>
     <div class="grupo" id="lista-capas"></div>
     <label class="base"><input type="checkbox" id="mapa-base" checked> Mapa base (OpenStreetMap, requiere internet)</label>
+  </section>
+
+  <section id="tab-predio" class="tab">
+    <h2>Consulta</h2>
+    <div class="grupo" id="alcance">
+      <label><input type="radio" name="alcance" value="zona" checked> Toda la zona cargada</label>
+      <label><input type="radio" name="alcance" value="predio"> Desde un predio (su vecindad de 30 manzanas)</label>
+    </div>
+    <div id="buscador" hidden>
+      <input id="q" type="search" placeholder="Dirección, CHIP o código de lote" autocomplete="off">
+      <ul id="resultados"></ul>
+      <p class="nota">También puede hacer clic en un lote del mapa y elegir «Analizar desde este predio».</p>
+    </div>
+    <div id="ficha"></div>
   </section>
 
   <section id="tab-calidad" class="tab">

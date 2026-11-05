@@ -85,6 +85,8 @@ def exportar(con):
         (DESTINO / f"{nombre}.geojson").write_text(json.dumps(coleccion, separators=(",", ":"), default=_json), encoding="utf-8")
         print(f"exportado {nombre}: {len(coleccion['features'])} elementos", flush=True)
 
+    _exportar_predios(cur)
+
     resumen = {"generado": datetime.now().isoformat(timespec="seconds")}
     cur.execute("""SELECT t.table_schema || '.' || t.table_name,
                           (xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM %I.%I',
@@ -113,3 +115,53 @@ def exportar(con):
     resumen["ejecuciones"] = [{"version": a, "fecha": b, "escenario": c} for a, b, c in cur.fetchall()]
     (DESTINO / "resumen.json").write_text(json.dumps(resumen, ensure_ascii=False, default=_json), encoding="utf-8")
     print("exportado resumen.json", flush=True)
+
+
+def _exportar_predios(cur):
+    """predios.json: por predio, sus indicadores y los establecimientos alcanzables (matriz_od); por manzana, su vecindad.
+    Permite que el visor responda "desde este predio" sin servidor de consultas."""
+    cur.execute("""SELECT e.id, e.nombre, c.nombre, ST_X(ST_Transform(e.geom, 4326)), ST_Y(ST_Transform(e.geom, 4326))
+                   FROM alimentos.establecimiento e JOIN alimentos.categoria c ON c.id = e.categoria_id ORDER BY e.id""")
+    ests = cur.fetchall()
+    indice = {f[0]: i for i, f in enumerate(ests)}
+    establecimientos = [{"nombre": n, "categoria": c, "lon": round(x, 6), "lat": round(y, 6)} for _, n, c, x, y in ests]
+
+    cur.execute("""SELECT m.codigo, array_agg(v.codigo ORDER BY v.codigo)
+                   FROM analisis.vecindad_manzana vm JOIN analisis.escenario es ON es.id = vm.escenario_id AND es.nombre = 'base'
+                   JOIN territorio.manzana m ON m.id = vm.manzana_id JOIN territorio.manzana v ON v.id = vm.vecina_id
+                   GROUP BY m.codigo""")
+    vecindad = {m: v for m, v in cur.fetchall()}
+
+    predios = {}
+    cur.execute("""SELECT p.id, p.chip, p.direccion, l.codigo, m.codigo, es.nombre, i.ica, i.ipt, i.acc_m, i.n_cobertura,
+                          i.n_categorias, i.estrato, i.nota_incertidumbre, d.peso_demanda, pa.distancia_acceso
+                   FROM analisis.indicador_predio i
+                   JOIN analisis.v_ultima_ejecucion ex ON ex.ejecucion_id = i.ejecucion_id
+                   JOIN analisis.escenario es ON es.id = ex.escenario_id
+                   JOIN territorio.predio p ON p.id = i.predio_id
+                   JOIN territorio.lote l ON l.id = p.lote_id
+                   JOIN territorio.manzana m ON m.id = l.manzana_id
+                   LEFT JOIN social.demanda_predio d ON d.predio_id = p.id
+                   LEFT JOIN movilidad.punto_acceso pa ON pa.predio_id = p.id
+                   ORDER BY p.chip, es.id""")
+    for (pid, chip, dire, lote, mz, esc, ica, ipt, acc, ncob, ncat, estr, nota, dem, dacc) in cur.fetchall():
+        r = predios.setdefault(pid, {"chip": chip, "dir": dire, "lote": lote, "mz": mz, "estrato": estr,
+                                     "dem": None if dem is None else round(float(dem) * 1000, 3),
+                                     "acceso_m": None if dacc is None else round(float(dacc), 1)})
+        k = "obras" if esc == "con_obras" else "base"
+        r[k] = {"ica": ica, "ipt": ipt, "acc": acc, "cob": ncob, "cat": ncat, "nota": nota}
+    cur.execute("""SELECT od.predio_id, es.nombre, od.establecimiento_id, round(od.distancia_red, 0)
+                   FROM analisis.matriz_od od JOIN analisis.v_ultima_ejecucion ex ON ex.ejecucion_id = od.ejecucion_id
+                   JOIN analisis.escenario es ON es.id = ex.escenario_id
+                   ORDER BY od.predio_id, od.distancia_red""")
+    for pid, esc, eid, dist in cur.fetchall():
+        if pid in predios:
+            predios[pid].setdefault("od_obras" if esc == "con_obras" else "od_base", []).append([indice[eid], int(dist)])
+    lista = list(predios.values())
+    for r in lista:
+        if r.get("od_obras") == r.get("od_base"):
+            r.pop("od_obras", None)       # el visor usa od_base cuando no hay diferencia entre escenarios
+    salida = {"establecimientos": establecimientos, "vecindad": vecindad, "predios": lista}
+    (DESTINO / "predios.json").write_text(json.dumps(salida, ensure_ascii=False, separators=(",", ":"), default=_json),
+                                          encoding="utf-8")
+    print(f"exportado predios.json: {len(lista)} predios", flush=True)

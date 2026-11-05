@@ -34,6 +34,7 @@ Scripts/00..10_*.sql    esquemas, crudo, territorio, social, alimentos, movilida
 Scripts/loader/         cargador Python (ArcGIS REST, GTFS) y exportación para el visor
 Scripts/legacy/         los 9 SQL originales del taller, sin editar
 SIG/                    visor web estático (MapLibre GL 4.7.1 incluido en vendor/) y SIG/data con las capas exportadas
+
 Backup/                 respaldos: original (punto de partida) y final (resultado)
 DATOS_NECESARIOS.md     inventario de datos, fuentes y estado
 ```
@@ -90,6 +91,10 @@ Detalle y estado en `DATOS_NECESARIOS.md`; el catálogo completo, con fechas y l
 ## Resultado actual (zona cargada)
 
 76 manzanas · 2 394 lotes · 3 331 predios · 8 175 usos · 70 establecimientos · red de 9 580 nodos y 9 841 aristas · 83 938 pares predio-establecimiento por escenario · 2 estaciones de TransMilenio y 41 paraderos SITP conectados · 12 y 87 rutas que pasan por ellos. Todos los predios tienen punto de acceso y ICA; las pruebas de `analisis.v_calidad` pasan, salvo los 90 usos sin área en la fuente, que se informan como dato faltante.
+
+## Consulta desde un predio (visor)
+
+La pestaña *Predio* tiene dos alcances: **toda la zona cargada** (todos los predios coloreados por ICA/IPT) y **desde un predio**. Se elige buscando por dirección, CHIP o código de lote, o con clic en un lote y «Analizar desde este predio»; también por enlace directo `http://localhost:8080/?chip=<CHIP>`. El visor atenúa lo que queda fuera de las 30 manzanas de vecindad del predio, resalta sus establecimientos alcanzables (≤ 800 m en verde) y lista cada distancia por la red y su tiempo a 1,25 m/s, para el escenario elegido. Los datos salen de `SIG/data/predios.json` (generado por `exportar`, a partir de `analisis.matriz_od`, `indicador_predio` y `vecindad_manzana`). Las líneas dibujadas son rectas de referencia, no el trazado por la red.
 
 ## Limitaciones
 

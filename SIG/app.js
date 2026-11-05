@@ -1,6 +1,7 @@
 /* Visor estatico: lee SIG/data/*.geojson (exportados por Scripts/loader/exportar.py). */
 const CENTRO = [-74.1185, 4.6240];
-const ESTADO = { escenario: "base", modo: "ica" };
+const ESTADO = { escenario: "base", modo: "ica", alcance: "zona", predio: null };
+let PREDIOS = null, LOTES = null, MANZANAS = null;
 
 const RAMPA_ICA = ["#b2182b", "#ef8a62", "#fddbc7", "#d9f0d3", "#7fbf7b", "#1b7837"];
 const RAMPA_IPT = ["#f7f4f9", "#d4b9da", "#c994c7", "#df65b0", "#dd1c77", "#7a0177"];
@@ -94,7 +95,8 @@ const POPUPS = {
   lotes: (p) => {
     const e = ESTADO.escenario === "obras" ? "obras" : "base";
     return popup(`Lote ${p.codigo}`, [["Dirección", p.direccion || "sin dato"], ["Predios", p.predios], ["Uso predominante", p.uso || "sin dato"],
-      ["Estrato", p.estrato || "sin dato"], ["ICA", num(p[`ica_${e}`])], ["IPT", num(p[`ipt_${e}`])], ["Demanda (inferida)", num(p.demanda, 2)]]);
+      ["Estrato", p.estrato || "sin dato"], ["ICA", num(p[`ica_${e}`])], ["IPT", num(p[`ipt_${e}`])], ["Demanda (inferida)", num(p.demanda, 2)]])
+      + `<button class="ir" data-lote="${esc(p.codigo)}">Analizar desde este predio</button>`;
   },
   establecimientos: (p) => popup(p.nombre || "Sin nombre", [["Categoría", p.categoria], ["Fuente", p.fuente]]),
   estaciones_tm: (p) => popup(p.nombre, [["Código GTFS", p.codigo], ["Rutas que pasan", p.rutas]]),
@@ -197,6 +199,135 @@ document.getElementById("mapa-base").addEventListener("change", (e) =>
 function actualizar() {
   if (mapa.getLayer("lotes")) mapa.setPaintProperty("lotes", "fill-color", colorLotes());
   leyenda();
+  if (ESTADO.predio) fichaPredio();
+}
+
+/* ---- Consulta desde un predio ---- */
+const clave = (t) => String(t ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+const UMBRAL = 800;
+
+function centroLote(codigo) {
+  const f = LOTES.features.find((x) => x.properties.codigo === codigo);
+  if (!f) return null;
+  const pts = (f.geometry.type === "Polygon" ? f.geometry.coordinates[0] : f.geometry.coordinates[0][0]);
+  const b = pts.reduce((r, p) => [Math.min(r[0], p[0]), Math.min(r[1], p[1]), Math.max(r[2], p[0]), Math.max(r[3], p[1])], [180, 90, -180, -90]);
+  return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
+}
+
+function buscar(texto) {
+  const q = clave(texto).trim();
+  const ul = document.getElementById("resultados");
+  if (q.length < 2) { ul.innerHTML = ""; return; }
+  const hits = PREDIOS.predios.filter((p) => clave(`${p.dir} ${p.chip} ${p.lote}`).includes(q)).slice(0, 8);
+  ul.innerHTML = hits.map((p) => `<li data-chip="${esc(p.chip)}">${esc(p.dir || "sin direccion")}<small>CHIP ${esc(p.chip)} &middot; lote ${esc(p.lote)}</small></li>`).join("")
+    || `<li class="nota">Sin coincidencias</li>`;
+}
+
+function seleccionar(chip) {
+  const p = PREDIOS.predios.find((x) => x.chip === chip);
+  if (!p) return;
+  ESTADO.predio = p;
+  ESTADO.alcance = "predio";
+  document.querySelector('input[name="alcance"][value="predio"]').checked = true;
+  document.getElementById("buscador").hidden = false;
+  document.querySelector('#pestanas [data-tab="predio"]').click();
+  document.getElementById("resultados").innerHTML = "";
+  dibujarSeleccion(true);
+  fichaPredio();
+}
+
+function limpiarSeleccion() {
+  ESTADO.predio = null;
+  ["sel-od", "sel-est", "sel-lote", "sel-vecindad"].forEach((id) => mapa.getSource(id) && mapa.getSource(id).setData({ type: "FeatureCollection", features: [] }));
+  mapa.setPaintProperty("lotes", "fill-opacity", 0.85);
+  document.getElementById("ficha").innerHTML = "";
+}
+
+function odActual() {
+  const p = ESTADO.predio;
+  return ESTADO.escenario === "obras" ? (p.od_obras || p.od_base || []) : (p.od_base || []);
+}
+
+function dibujarSeleccion(ajustar) {
+  const p = ESTADO.predio;
+  const vec = PREDIOS.vecindad[p.mz] || [p.mz];
+  mapa.setPaintProperty("lotes", "fill-opacity", ["case", ["in", ["get", "manzana"], ["literal", vec]], 0.9, 0.12]);
+  const mz = MANZANAS.features.filter((f) => vec.includes(f.properties.codigo));
+  mapa.getSource("sel-vecindad").setData({ type: "FeatureCollection", features: mz });
+  mapa.getSource("sel-lote").setData({ type: "FeatureCollection", features: LOTES.features.filter((f) => f.properties.codigo === p.lote) });
+  const origen = centroLote(p.lote);
+  const od = odActual();
+  const est = (i) => [PREDIOS.establecimientos[i].lon, PREDIOS.establecimientos[i].lat];
+  mapa.getSource("sel-od").setData({ type: "FeatureCollection", features: od.map(([i, d]) => ({ type: "Feature",
+    properties: { cerca: d <= UMBRAL ? 1 : 0 }, geometry: { type: "LineString", coordinates: [origen, est(i)] } })) });
+  mapa.getSource("sel-est").setData({ type: "FeatureCollection", features: od.map(([i, d]) => ({ type: "Feature",
+    properties: { cerca: d <= UMBRAL ? 1 : 0 }, geometry: { type: "Point", coordinates: est(i) } })) });
+  if (ajustar) {
+    const pts = mz.flatMap((f) => (f.geometry.type === "Polygon" ? f.geometry.coordinates[0] : f.geometry.coordinates.flatMap((q) => q[0])));
+    const caja = pts.reduce((b, q) => b.extend(q), new maplibregl.LngLatBounds(origen, origen));
+    mapa.fitBounds(caja, { padding: 50, duration: 600 });
+  }
+}
+
+function fichaPredio() {
+  const p = ESTADO.predio;
+  const r = (ESTADO.escenario === "obras" ? p.obras : p.base) || {};
+  const od = odActual();
+  const cerca = od.filter(([, d]) => d <= UMBRAL).length;
+  const fila = ([i, d]) => `<div class="est ${d > UMBRAL ? "lejos" : ""}" data-est="${i}"><span>${esc(PREDIOS.establecimientos[i].nombre || "Sin nombre")}
+    <small class="nota">${esc(PREDIOS.establecimientos[i].categoria)}</small></span><i>${d} m &middot; ${Math.round(d / 1.25 / 60)} min</i></div>`;
+  document.getElementById("ficha").innerHTML = `<h2>Predio seleccionado</h2>
+    <b>${esc(p.dir || "Sin dirección")}</b>
+    <div class="nota">CHIP ${esc(p.chip)} &middot; lote ${esc(p.lote)} &middot; manzana ${esc(p.mz)} &middot; estrato ${p.estrato || "sin dato"}</div>
+    <div class="kpis"><div class="kpi"><b>${num(r.ica)}</b><span>ICA</span></div><div class="kpi"><b>${num(r.ipt)}</b><span>IPT</span></div>
+      <div class="kpi"><b>${cerca}</b><span>a &le; ${UMBRAL} m</span></div></div>
+    <div class="nota">Establecimiento más cercano: ${r.acc == null ? "ninguno alcanzable" : num(r.acc, 0) + " m"} &middot; ${r.cat ?? 0} categorías en el umbral.
+      Distancia del lote a la red: ${num(p.acceso_m)} m. Las líneas del mapa son rectas de referencia; las distancias son por la red peatonal.</div>
+    ${r.nota ? `<div class="nota"><b>Nota:</b> ${esc(r.nota)}</div>` : ""}
+    <h2>Establecimientos en su vecindad (${od.length})</h2>${od.map(fila).join("") || '<div class="nota">Ninguno alcanzable por la red.</div>'}
+    <p class="nota"><a href="#" id="volver-zona">Volver a toda la zona</a></p>`;
+  dibujarSeleccion(false);
+}
+
+function iniciarSeleccion() {
+  ["sel-vecindad", "sel-lote", "sel-od", "sel-est"].forEach((id) => mapa.addSource(id, { type: "geojson", data: { type: "FeatureCollection", features: [] } }));
+  mapa.addLayer({ id: "sel-vecindad", type: "line", source: "sel-vecindad", paint: { "line-color": "#1e6f5c", "line-width": 2.2 } });
+  mapa.addLayer({ id: "sel-od", type: "line", source: "sel-od", paint: { "line-color": ["case", ["==", ["get", "cerca"], 1], "#1e6f5c", "#9aa5a8"],
+    "line-width": 1.4, "line-dasharray": [2, 2] } });
+  mapa.addLayer({ id: "sel-est", type: "circle", source: "sel-est", paint: { "circle-radius": 9, "circle-color": "rgba(0,0,0,0)",
+    "circle-stroke-width": 2.5, "circle-stroke-color": ["case", ["==", ["get", "cerca"], 1], "#1e6f5c", "#9aa5a8"] } });
+  mapa.addLayer({ id: "sel-lote", type: "line", source: "sel-lote", paint: { "line-color": "#111", "line-width": 3 } });
+
+  document.getElementById("alcance").addEventListener("change", (e) => {
+    ESTADO.alcance = e.target.value;
+    document.getElementById("buscador").hidden = ESTADO.alcance !== "predio";
+    if (ESTADO.alcance === "zona") limpiarSeleccion();
+  });
+  document.getElementById("q").addEventListener("input", (e) => buscar(e.target.value));
+  document.getElementById("resultados").addEventListener("click", (e) => { const li = e.target.closest("li[data-chip]"); if (li) seleccionar(li.dataset.chip); });
+  document.getElementById("ficha").addEventListener("click", (e) => {
+    if (e.target.id === "volver-zona") {
+      e.preventDefault();
+      document.querySelector('input[name="alcance"][value="zona"]').checked = true;
+      ESTADO.alcance = "zona";
+      document.getElementById("buscador").hidden = true;
+      limpiarSeleccion();
+      return;
+    }
+    const fila = e.target.closest(".est");
+    if (fila) { const s = PREDIOS.establecimientos[fila.dataset.est]; mapa.flyTo({ center: [s.lon, s.lat], zoom: 18 }); }
+  });
+  document.body.addEventListener("click", (e) => {
+    const b = e.target.closest("button.ir");
+    if (!b) return;
+    const ps = PREDIOS.predios.filter((x) => x.lote === b.dataset.lote);
+    if (!ps.length) return;
+    seleccionar(ps[0].chip);
+    if (ps.length > 1) {                           // varios predios en el lote (propiedad horizontal): se listan para elegir otro
+      document.getElementById("q").value = b.dataset.lote;
+      buscar(b.dataset.lote);
+    }
+  });
 }
 
 mapa.on("load", async () => {
@@ -210,13 +341,19 @@ mapa.on("load", async () => {
   }
   try {
     const [lotes, ...resto] = await Promise.all(["lotes", ...CAPAS.map((c) => c.id)].map(cargar));
+    LOTES = lotes;
+    MANZANAS = resto[CAPAS.findIndex((c) => c.id === "manzanas")];
+    PREDIOS = await (await fetch("data/predios.json")).json();
     mapa.addSource("lotes", { type: "geojson", data: lotes });
     mapa.addLayer({ id: "lotes", type: "fill", source: "lotes", paint: { "fill-color": colorLotes(), "fill-opacity": 0.85, "fill-outline-color": "#ffffff" } });
     CAPAS.forEach((c, i) => agregarCapa(c, resto[i]));
     ["lotes", ...CAPAS.map((c) => c.id)].forEach(interaccion);
+    iniciarSeleccion();
     listaCapas();
     leyenda();
     await resumen();
+    const chip = new URLSearchParams(location.search).get("chip");   // enlace directo: ?chip=<CHIP>
+    if (chip) seleccionar(chip);
     const zona = resto[0].features[0].geometry.coordinates[0];
     const caja = zona.reduce((b, p) => b.extend(p), new maplibregl.LngLatBounds(zona[0], zona[0]));
     mapa.fitBounds(caja, { padding: 40, duration: 0 });
