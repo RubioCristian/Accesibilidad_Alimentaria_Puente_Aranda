@@ -13,10 +13,11 @@ CAJA_ZONA = ("SELECT st_xmin(e),st_ymin(e),st_xmax(e),st_ymax(e) FROM "
 
 
 def cargar_predio(con):
+    """Incremental y reanudable: solo pide los lotes que aun no tienen filas (para recargar todo, TRUNCATE crudo.predio_catastro)."""
     cur = con.cursor()
-    cur.execute("SELECT codigo_lote FROM crudo.legado_lotes ORDER BY 1")
+    cur.execute("""SELECT l.codigo_lote FROM crudo.lote_catastro l
+                   WHERE NOT EXISTS (SELECT 1 FROM crudo.predio_catastro p WHERE p.barmanpre = l.codigo_lote) ORDER BY 1""")
     codigos = [f[0] for f in cur.fetchall()]
-    cur.execute("TRUNCATE crudo.predio_catastro")
     total = 0
     for i in range(0, len(codigos), 100):
         lista = ",".join(f"'{c}'" for c in codigos[i:i + 100])
@@ -24,15 +25,19 @@ def cargar_predio(con):
             cur.execute(
                 """INSERT INTO crudo.predio_catastro (objectid, chip, barmanpre, nupre, clase, destino, cod_uso,
                      area_uso, area_terreno, area_construida, uso_vivienda, unidad_calificada, direccion,
-                     vigencia_actual, atributos) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                     vigencia_actual, atributos) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT (objectid) DO NOTHING""",
                 (a["OBJECTID"], a["PRECHIP"], a["BARMANPRE"], a["PRENUPRE"], a["PRECLASE"], a["PRECDESTIN"],
                  a["PRECUSO"], a["PREAUSO"], a["PREATERRE"], a["PREACONST"], a["PREUVIVIEN"], a["PREUCALIF"],
                  a["PREDIRECC"], a["PREVACTUAL"], json.dumps(a)),
             )
             total += 1
+        con.commit()
+        if (i // 100) % 20 == 0:
+            print(f"  predio: {min(i + 100, len(codigos))}/{len(codigos)} lotes ({total} filas)", flush=True)
     registrar_fuente(cur, "Catastro - Predio con uso por construccion", "UAECD Catastro Bogota", URL_PREDIO,
                      "Datos abiertos Bogota (sin propietario ni datos personales)",
-                     "Lotes de la zona cargada", "Predial",
+                     "Lotes de la localidad", "Predial",
                      "Una fila por unidad calificada: el CHIP se repite. No distingue tiendas de alimentos del resto del comercio")
     con.commit()
     print(f"predio: {total} filas", flush=True)
@@ -55,7 +60,7 @@ def cargar_estrato(con):
         )
         total += 1
     registrar_fuente(cur, "Catastro - Estratificacion", "UAECD Catastro / Secretaria Distrital de Planeacion", URL_ESTRATO,
-                     "Datos abiertos Bogota", "Caja de la zona cargada", "Manzana",
+                     "Datos abiertos Bogota", "Caja de la localidad", "Manzana",
                      "El codigo de manzana de esta capa no coincide con MANCODIGO; se une por interseccion espacial. Estrato 0 = sin estrato")
     con.commit()
     print(f"estrato: {total} poligonos", flush=True)

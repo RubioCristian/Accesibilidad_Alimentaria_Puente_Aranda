@@ -10,6 +10,7 @@ from .catastro import cargar_estrato, cargar_obras, cargar_predio
 from .comun import conectar
 from .exportar import exportar
 from .gtfs import cargar_gtfs
+from .localidad import cargar_lotes, cargar_malla_vial, cargar_osm, fijar_cobertura
 
 RAIZ = Path(__file__).resolve().parents[1]
 
@@ -28,6 +29,10 @@ def main(fases):
     if "base" in fases:
         aplicar_sql(con, 0, 1)
     if "cargas" in fases:
+        fijar_cobertura(con)
+        cargar_lotes(con)
+        cargar_malla_vial(con)
+        cargar_osm(con)
         cargar_predio(con)
         cargar_estrato(con)
         cargar_obras(con)

@@ -7,6 +7,7 @@ from pathlib import Path
 DESTINO = Path(__file__).resolve().parents[2] / "SIG" / "data"
 ZONA = "(SELECT geom FROM crudo.cobertura_cargada LIMIT 1)"
 G = "ST_Transform({}, 4326)"
+PRECISION = {"red": 5, "vias": 5}   # decimales de las coordenadas; las capas grandes usan menos
 
 CAPAS = {
     "cobertura": f"""SELECT jsonb_build_object('nombre', 'Zona cargada'), {G.format('geom')} FROM crudo.cobertura_cargada""",
@@ -22,16 +23,17 @@ CAPAS = {
             SELECT p.lote_id, u.codigo_uso, sum(coalesce(u.area_uso, 0)) a
             FROM territorio.predio p JOIN territorio.uso_construccion u ON u.predio_id = p.id
             GROUP BY 1, 2) s ORDER BY lote_id, a DESC),
-        res AS (SELECT p.lote_id, count(*) n, min(p.direccion) dir, sum(d.peso_demanda) dem
+        res AS (SELECT p.lote_id, count(*) n, sum(d.peso_demanda) dem
                 FROM territorio.predio p LEFT JOIN social.demanda_predio d ON d.predio_id = p.id GROUP BY 1)
-        SELECT jsonb_build_object('codigo', l.codigo, 'manzana', m.codigo, 'predios', res.n, 'direccion', res.dir,
+        SELECT jsonb_build_object('codigo', l.codigo, 'manzana', m.codigo, 'predios', res.n,
                'uso', uso.codigo_uso,
                'uso_clase', CASE WHEN uso.codigo_uso IN ('001','002','037','038') THEN 'vivienda'
                                  WHEN uso.codigo_uso IN ('003','004','039','040','056','060','066') THEN 'comercio'
                                  ELSE 'otro' END,
-               'estrato', es.estrato, 'demanda', round(res.dem * 1000, 3),
-               'ica_base', b.ica, 'ipt_base', b.ipt, 'ica_obras', o.ica, 'ipt_obras', o.ipt),
-               {G.format('ST_SimplifyPreserveTopology(l.geom, 0.3)')}
+               'estrato', es.estrato, 'demanda', round(res.dem * 100000, 2),
+               'ica_base', round(b.ica, 1), 'ipt_base', round(b.ipt, 1),
+               'ica_obras', round(o.ica, 1), 'ipt_obras', round(o.ipt, 1)),
+               {G.format('ST_SimplifyPreserveTopology(l.geom, 0.5)')}
         FROM territorio.lote l
         JOIN territorio.manzana m ON m.id = l.manzana_id AND l.tipo = 'predial'
         LEFT JOIN res ON res.lote_id = l.id
@@ -43,10 +45,7 @@ CAPAS = {
                                    {G.format('e.geom')}
                             FROM alimentos.establecimiento e JOIN alimentos.categoria c ON c.id = e.categoria_id
                             LEFT JOIN crudo.fuente_dato f ON f.id = e.fuente_id""",
-    "red": f"""SELECT jsonb_build_object('tipo', CASE WHEN conexion_id IS NOT NULL THEN 'conexion' ELSE 'anden' END,
-                                         'longitud', round(longitud, 1)),
-                      {G.format('geom')}
-               FROM movilidad.arista_red""",
+    "red": f"""SELECT jsonb_build_object('origen', origen), {G.format('geom')} FROM movilidad.arista_red""",
     "vias": f"""SELECT jsonb_build_object('nombre', nombre, 'tipo', tipo), {G.format('geom')} FROM movilidad.via""",
     "estaciones_tm": f"""SELECT jsonb_build_object('nombre', nombre, 'codigo', codigo,
                            'rutas', (SELECT count(*) FROM movilidad.ruta_estacion_tm r WHERE r.estacion_id = e.id)),
@@ -79,7 +78,7 @@ def exportar(con):
     cur = con.cursor()
     for nombre, interno in CAPAS.items():
         cur.execute(f"""SELECT jsonb_build_object('type', 'FeatureCollection', 'features', coalesce(jsonb_agg(
-                          jsonb_build_object('type', 'Feature', 'properties', props, 'geometry', ST_AsGeoJSON(g, 6)::jsonb)
+                          jsonb_build_object('type', 'Feature', 'properties', props, 'geometry', ST_AsGeoJSON(g, {PRECISION.get(nombre, 6)})::jsonb)
                           ), '[]'::jsonb)) FROM ({interno}) t(props, g)""")
         coleccion = cur.fetchone()[0]
         (DESTINO / f"{nombre}.geojson").write_text(json.dumps(coleccion, separators=(",", ":"), default=_json), encoding="utf-8")
@@ -118,12 +117,13 @@ def exportar(con):
 
 
 def _exportar_predios(cur):
-    """predios.json: por predio, sus indicadores y los establecimientos alcanzables (matriz_od); por manzana, su vecindad.
-    Permite que el visor responda "desde este predio" sin servidor de consultas."""
+    """Consulta "desde un predio" sin servidor: predios_indice.json (buscador, vecindades, establecimientos) y un
+    fragmento por manzana en mz/<codigo>.json con los predios de la manzana y los establecimientos alcanzables
+    (matriz_od) de cada uno de sus lotes."""
+    import shutil
     cur.execute("""SELECT e.id, e.nombre, c.nombre, ST_X(ST_Transform(e.geom, 4326)), ST_Y(ST_Transform(e.geom, 4326))
                    FROM alimentos.establecimiento e JOIN alimentos.categoria c ON c.id = e.categoria_id ORDER BY e.id""")
     ests = cur.fetchall()
-    indice = {f[0]: i for i, f in enumerate(ests)}
     establecimientos = [{"nombre": n, "categoria": c, "lon": round(x, 6), "lat": round(y, 6)} for _, n, c, x, y in ests]
 
     cur.execute("""SELECT m.codigo, array_agg(v.codigo ORDER BY v.codigo)
@@ -132,7 +132,26 @@ def _exportar_predios(cur):
                    GROUP BY m.codigo""")
     vecindad = {m: v for m, v in cur.fetchall()}
 
-    predios = {}
+    # Establecimientos alcanzables por lote (los predios de un lote comparten acceso y vecindad).
+    cur.execute("""WITH idx AS (SELECT id, row_number() OVER (ORDER BY id) - 1 AS i FROM alimentos.establecimiento),
+                        rep AS (SELECT DISTINCT ON (l.id) l.id AS lote_id, p.id AS predio_id
+                                FROM territorio.lote l JOIN territorio.predio p ON p.lote_id = l.id
+                                JOIN movilidad.punto_acceso pa ON pa.predio_id = p.id ORDER BY l.id, p.id)
+                   SELECT l.codigo, es.nombre, jsonb_agg(jsonb_build_array(idx.i, round(od.distancia_red)) ORDER BY od.distancia_red)
+                   FROM analisis.matriz_od od
+                   JOIN analisis.v_ultima_ejecucion ex ON ex.ejecucion_id = od.ejecucion_id
+                   JOIN analisis.escenario es ON es.id = ex.escenario_id
+                   JOIN rep ON rep.predio_id = od.predio_id
+                   JOIN territorio.lote l ON l.id = rep.lote_id
+                   JOIN idx ON idx.id = od.establecimiento_id
+                   GROUP BY l.codigo, es.nombre""")
+    od = {}
+    for lote, esc, lista in cur.fetchall():
+        od.setdefault(lote, {})["obras" if esc == "con_obras" else "base"] = lista
+    for lote, d in od.items():
+        if d.get("obras") == d.get("base"):
+            d.pop("obras", None)           # sin diferencia entre escenarios: el visor usa "base"
+
     cur.execute("""SELECT p.id, p.chip, p.direccion, l.codigo, m.codigo, es.nombre, i.ica, i.ipt, i.acc_m, i.n_cobertura,
                           i.n_categorias, i.estrato, i.nota_incertidumbre, d.peso_demanda, pa.distancia_acceso
                    FROM analisis.indicador_predio i
@@ -143,25 +162,26 @@ def _exportar_predios(cur):
                    JOIN territorio.manzana m ON m.id = l.manzana_id
                    LEFT JOIN social.demanda_predio d ON d.predio_id = p.id
                    LEFT JOIN movilidad.punto_acceso pa ON pa.predio_id = p.id
-                   ORDER BY p.chip, es.id""")
+                   ORDER BY m.codigo, l.codigo, p.chip, es.id""")
+    predios = {}
     for (pid, chip, dire, lote, mz, esc, ica, ipt, acc, ncob, ncat, estr, nota, dem, dacc) in cur.fetchall():
         r = predios.setdefault(pid, {"chip": chip, "dir": dire, "lote": lote, "mz": mz, "estrato": estr,
-                                     "dem": None if dem is None else round(float(dem) * 1000, 3),
+                                     "dem": None if dem is None else round(float(dem) * 100000, 2),
                                      "acceso_m": None if dacc is None else round(float(dacc), 1)})
-        k = "obras" if esc == "con_obras" else "base"
-        r[k] = {"ica": ica, "ipt": ipt, "acc": acc, "cob": ncob, "cat": ncat, "nota": nota}
-    cur.execute("""SELECT od.predio_id, es.nombre, od.establecimiento_id, round(od.distancia_red, 0)
-                   FROM analisis.matriz_od od JOIN analisis.v_ultima_ejecucion ex ON ex.ejecucion_id = od.ejecucion_id
-                   JOIN analisis.escenario es ON es.id = ex.escenario_id
-                   ORDER BY od.predio_id, od.distancia_red""")
-    for pid, esc, eid, dist in cur.fetchall():
-        if pid in predios:
-            predios[pid].setdefault("od_obras" if esc == "con_obras" else "od_base", []).append([indice[eid], int(dist)])
-    lista = list(predios.values())
-    for r in lista:
-        if r.get("od_obras") == r.get("od_base"):
-            r.pop("od_obras", None)       # el visor usa od_base cuando no hay diferencia entre escenarios
-    salida = {"establecimientos": establecimientos, "vecindad": vecindad, "predios": lista}
-    (DESTINO / "predios.json").write_text(json.dumps(salida, ensure_ascii=False, separators=(",", ":"), default=_json),
-                                          encoding="utf-8")
-    print(f"exportado predios.json: {len(lista)} predios", flush=True)
+        r["obras" if esc == "con_obras" else "base"] = {"ica": ica, "ipt": ipt, "acc": acc, "cob": ncob, "cat": ncat, "nota": nota}
+
+    por_manzana, lotes_idx = {}, {}
+    for r in predios.values():
+        por_manzana.setdefault(r["mz"], []).append(r)
+        lotes_idx.setdefault(r["lote"], [r["mz"], r["dir"], []])[2].append(r["chip"])
+    mz_dir = DESTINO / "mz"
+    shutil.rmtree(mz_dir, ignore_errors=True)
+    mz_dir.mkdir(parents=True)
+    for mz, lista in por_manzana.items():
+        lotes = {r["lote"]: od[r["lote"]] for r in lista if r["lote"] in od}
+        (mz_dir / f"{mz}.json").write_text(
+            json.dumps({"lotes": lotes, "predios": lista}, ensure_ascii=False, separators=(",", ":"), default=_json), encoding="utf-8")
+    indice = {"establecimientos": establecimientos, "vecindad": vecindad,
+              "lotes": [[c, v[0], v[1], v[2]] for c, v in lotes_idx.items()]}
+    (DESTINO / "predios_indice.json").write_text(json.dumps(indice, ensure_ascii=False, separators=(",", ":"), default=_json), encoding="utf-8")
+    print(f"exportado predios: {len(predios)} predios en {len(por_manzana)} manzanas", flush=True)

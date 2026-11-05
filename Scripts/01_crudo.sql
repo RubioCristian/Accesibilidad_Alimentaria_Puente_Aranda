@@ -63,3 +63,35 @@ CREATE TABLE IF NOT EXISTS crudo.gtfs_ruta (
 CREATE TABLE IF NOT EXISTS crudo.gtfs_ruta_parada (
   route_id text, stop_id text, orden int, PRIMARY KEY (route_id, stop_id)
 );
+
+-- Localidad completa: lotes y malla vial de Catastro / IDECA y comercio de alimentos de OpenStreetMap.
+CREATE TABLE IF NOT EXISTS crudo.lote_catastro (
+  objectid       bigint PRIMARY KEY,
+  codigo_lote    text NOT NULL,
+  codigo_manzana text NOT NULL,
+  geom           geometry(MultiPolygon, 9377) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS lote_catastro_manzana ON crudo.lote_catastro (codigo_manzana);
+
+CREATE TABLE IF NOT EXISTS crudo.malla_vial_catastro (
+  objectid      bigint PRIMARY KEY,
+  codigo_vial   text,
+  nombre_via    text,
+  clasificacion text,
+  tipo          text,
+  geom          geometry(MultiLineString, 9377) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS crudo.osm_elemento (
+  id        serial PRIMARY KEY,
+  tipo_osm  text NOT NULL,
+  id_osm    bigint NOT NULL,
+  nombre    text,
+  categoria text NOT NULL,
+  etiquetas jsonb,
+  geom      geometry(Point, 9377) NOT NULL,
+  UNIQUE (tipo_osm, id_osm)
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS predio_catastro_objectid ON crudo.predio_catastro (objectid);
+CREATE INDEX IF NOT EXISTS predio_catastro_barmanpre ON crudo.predio_catastro (barmanpre);

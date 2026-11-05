@@ -31,6 +31,7 @@ services:
       - "${WEB_PORT:-8080}:80"
     volumes:
       - ./SIG:/usr/share/nginx/html:ro,Z
+      - ./docker/web/default.conf:/etc/nginx/conf.d/default.conf:ro,Z
 
   etl:
     build:

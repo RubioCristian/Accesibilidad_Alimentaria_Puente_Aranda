@@ -100,7 +100,7 @@ def cargar_gtfs(con):
 
     registrar_fuente(cur, "GTFS TransMilenio/SITP 2026-04-29", "TransMilenio S.A.", URL,
                      "Datos abiertos (verificar terminos de uso del publicador)",
-                     "Paradas dentro de la zona cargada + ~900 m", "Parada",
+                     "Paradas dentro de la localidad + ~900 m", "Parada",
                      "Se guardan solo paradas y rutas cercanas; orden = menor stop_sequence observado; "
                      "estacion troncal = parada con location_type 1; el ZIP no se versiona")
     con.commit()

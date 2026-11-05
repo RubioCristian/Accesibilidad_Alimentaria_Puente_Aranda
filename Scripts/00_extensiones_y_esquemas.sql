@@ -38,7 +38,8 @@ BEGIN
       ('alimentos','supermercados_osm'), ('alimentos','otros_establecimientos_osm')
     ) AS t(esquema, tabla)
   LOOP
-    IF to_regclass(format('%I.%I', r.esquema, r.tabla)) IS NOT NULL THEN
+    IF to_regclass(format('%I.%I', r.esquema, r.tabla)) IS NOT NULL
+       AND to_regclass(format('crudo.legado_%s', r.tabla)) IS NULL THEN   -- ya movida: no se repite
       EXECUTE format('ALTER TABLE %I.%I RENAME TO %I', r.esquema, r.tabla, 'legado_' || r.tabla);
       -- los indices y secuencias propios tambien se renombran para no chocar con los de crudo
       FOR o IN SELECT indexname AS nombre, 'INDEX' AS tipo FROM pg_indexes

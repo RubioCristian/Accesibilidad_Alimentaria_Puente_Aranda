@@ -1,7 +1,7 @@
 /* Visor estatico: lee SIG/data/*.geojson (exportados por Scripts/loader/exportar.py). */
 const CENTRO = [-74.1185, 4.6240];
 const ESTADO = { escenario: "base", modo: "ica", alcance: "zona", predio: null };
-let PREDIOS = null, LOTES = null, MANZANAS = null;
+let INDICE = null, LOTES = null, MANZANAS = null;
 
 const RAMPA_ICA = ["#b2182b", "#ef8a62", "#fddbc7", "#d9f0d3", "#7fbf7b", "#1b7837"];
 const RAMPA_IPT = ["#f7f4f9", "#d4b9da", "#c994c7", "#df65b0", "#dd1c77", "#7a0177"];
@@ -13,15 +13,15 @@ const COLOR_CAT = {
 };
 
 const CAPAS = [
-  { id: "cobertura", titulo: "Zona cargada", tipo: "line", color: "#1f2a2e", ancho: 1.5, visible: true, ancla: "zona" },
+  { id: "cobertura", titulo: "Límite de la localidad", tipo: "line", color: "#1f2a2e", ancho: 1.5, visible: true, ancla: "zona" },
   { id: "manzanas", titulo: "Manzanas", tipo: "line", color: "#7d7869", ancho: 0.8, visible: true },
-  { id: "vias", titulo: "Malla vial", tipo: "line", color: "#9aa5a8", ancho: 1.2, visible: false },
-  { id: "red", titulo: "Red peatonal", tipo: "line", color: "#2b6cb0", ancho: 1, visible: false },
+  { id: "vias", titulo: "Malla vial", tipo: "line", color: "#9aa5a8", ancho: 1.2, visible: false, lazy: true },
+  { id: "red", titulo: "Red peatonal (derivada de la malla vial)", tipo: "line", color: "#2b6cb0", ancho: 1, visible: false, lazy: true },
   { id: "rutas_tm", titulo: "Rutas TransMilenio (GTFS)", tipo: "line", color: "#d62728", ancho: 2.4, visible: false },
-  { id: "rutas_sitp", titulo: "Rutas SITP (GTFS)", tipo: "line", color: "#ff7f0e", ancho: 1.4, visible: false, opacidad: 0.55 },
+  { id: "rutas_sitp", titulo: "Rutas SITP (GTFS)", tipo: "line", color: "#ff7f0e", ancho: 1.4, visible: false, opacidad: 0.55, lazy: true },
   { id: "obras", titulo: "Obras (area supuesta de 25 m)", tipo: "fill", color: "#e03131", visible: true, opacidad: 0.35 },
   { id: "estaciones_tm", titulo: "Estaciones TransMilenio", tipo: "circle", color: "#d62728", radio: 8, visible: true },
-  { id: "paraderos_sitp", titulo: "Paraderos SITP", tipo: "circle", color: "#ff7f0e", radio: 4, visible: false },
+  { id: "paraderos_sitp", titulo: "Paraderos SITP", tipo: "circle", color: "#ff7f0e", radio: 4, visible: false, lazy: true },
   { id: "establecimientos", titulo: "Establecimientos de alimentos", tipo: "circle", color: COLOR_CAT, radio: 6, visible: true },
 ];
 
@@ -153,7 +153,13 @@ function listaCapas() {
     + `<div class="nota" style="margin-top:6px">Establecimientos: ${Object.entries(COLOR_CAT).map(([k, c]) => `<span class="sw punto" style="display:inline-block;background:${c};margin:0 3px 0 6px"></span>${k}`).join("")}</div>`;
   cont.addEventListener("change", (e) => {
     const id = e.target.dataset.capa;
-    if (id) mapa.setLayoutProperty(id, "visibility", e.target.checked ? "visible" : "none");
+    if (!id) return;
+    const c = CAPAS.find((x) => x.id === id);
+    if (c && c.lazy && e.target.checked && !c.cargada) {
+      c.cargada = true;
+      cargar(id).then((d) => mapa.getSource(id).setData(d)).catch((err) => aviso(`No se pudo cargar ${id}: ${err.message}`));
+    }
+    mapa.setLayoutProperty(id, "visibility", e.target.checked ? "visible" : "none");
   });
 }
 
@@ -176,11 +182,12 @@ async function resumen() {
 }
 
 document.getElementById("limites").innerHTML = [
-  "La zona cargada son 76 manzanas y 2 394 lotes; la localidad completa tiene unos 39 697 lotes.",
+  "Cobertura: la localidad completa (1 810 manzanas, 39 731 lotes). Cerca de los l&iacute;mites no se cuentan establecimientos ni calles de las localidades vecinas, as&iacute; que los predios del borde tienen menos oferta de la real.",
   "La poblaci&oacute;n no est&aacute; publicada a nivel manzana y no hay tama&ntilde;o de hogar: la demanda es <b>inferida</b> a partir del &aacute;rea de vivienda.",
   "Sin datos de comedores vigentes, mercados campesinos, venta informal, precios ni calidad: esos criterios no se calculan.",
   "Las tiendas de barrio est&aacute;n subestimadas en OpenStreetMap.",
-  "Las obras vienen como puntos; el &aacute;rea de afectaci&oacute;n (25 m) es un supuesto. En esta zona no hay obras en ejecuci&oacute;n, por eso los dos escenarios coinciden.",
+  "Las obras vienen como puntos; el &aacute;rea de afectaci&oacute;n (25 m) es un supuesto. Solo 4 de las 8 obras en ejecuci&oacute;n tocan la red, as&iacute; que el escenario con obras cambia el resultado de unos 1 700 predios.",
+  "La red peatonal se deriva de los ejes de la malla vial: camina por la calzada, no por el andén, y no modela cruces peatonales.",
   "Solo se calcula el modo caminando (1,25 m/s). El transporte p&uacute;blico se muestra, pero no entra en el &iacute;ndice.",
   "El estrato es por manzana y el valor 0 (sin estrato) se trata como dato faltante.",
   "ICA e IPT son relativos a los predios de la zona (normalizaci&oacute;n min-max): no son comparables con otra zona.",
@@ -205,28 +212,49 @@ function actualizar() {
 /* ---- Consulta desde un predio ---- */
 const clave = (t) => String(t ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 const UMBRAL = 800;
+const FRAGMENTOS = {};          // manzana -> datos de sus predios y establecimientos alcanzables (se piden al elegir un predio)
+let LOTE_POR_CODIGO = null, LOTE_POR_CHIP = null, FICHA_SEQ = 0;
 
 function centroLote(codigo) {
-  const f = LOTES.features.find((x) => x.properties.codigo === codigo);
+  const f = LOTE_POR_CODIGO.get(codigo);
   if (!f) return null;
   const pts = (f.geometry.type === "Polygon" ? f.geometry.coordinates[0] : f.geometry.coordinates[0][0]);
   const b = pts.reduce((r, p) => [Math.min(r[0], p[0]), Math.min(r[1], p[1]), Math.max(r[2], p[0]), Math.max(r[3], p[1])], [180, 90, -180, -90]);
   return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
 }
 
+async function fragmento(mz) {
+  if (!FRAGMENTOS[mz]) {
+    const r = await fetch(`data/mz/${mz}.json`);
+    if (!r.ok) throw new Error(`manzana ${mz}: ${r.status}`);
+    FRAGMENTOS[mz] = await r.json();
+  }
+  return FRAGMENTOS[mz];
+}
+
 function buscar(texto) {
   const q = clave(texto).trim();
   const ul = document.getElementById("resultados");
-  if (q.length < 2) { ul.innerHTML = ""; return; }
-  const hits = PREDIOS.predios.filter((p) => clave(`${p.dir} ${p.chip} ${p.lote}`).includes(q)).slice(0, 8);
-  ul.innerHTML = hits.map((p) => `<li data-chip="${esc(p.chip)}">${esc(p.dir || "sin direccion")}<small>CHIP ${esc(p.chip)} &middot; lote ${esc(p.lote)}</small></li>`).join("")
-    || `<li class="nota">Sin coincidencias</li>`;
+  if (q.length < 3) { ul.innerHTML = ""; return; }
+  const hits = [];
+  for (const [codigo, mz, dir, chips] of INDICE.lotes) {
+    if (clave(`${dir} ${codigo} ${chips.join(" ")}`).includes(q)) {
+      hits.push(`<li data-lote="${esc(codigo)}">${esc(dir || "sin direccion")}<small>lote ${esc(codigo)} &middot; ${chips.length} predio${chips.length > 1 ? "s" : ""}</small></li>`);
+      if (hits.length === 8) break;
+    }
+  }
+  ul.innerHTML = hits.join("") || `<li class="nota">Sin coincidencias</li>`;
 }
 
-function seleccionar(chip) {
-  const p = PREDIOS.predios.find((x) => x.chip === chip);
-  if (!p) return;
-  ESTADO.predio = p;
+async function seleccionar(chip, loteCodigo) {
+  const entrada = loteCodigo ? INDICE.lotes.find((l) => l[0] === loteCodigo) : LOTE_POR_CHIP.get(chip);
+  if (!entrada) { aviso(`No se encontró el predio ${chip}`); return; }
+  const [lote, mz] = entrada;
+  const frag = await fragmento(mz);
+  const predio = frag.predios.find((x) => (chip ? x.chip === chip : x.lote === lote));
+  if (!predio) return;
+  ESTADO.predio = predio;
+  ESTADO.frag = frag;
   ESTADO.alcance = "predio";
   document.querySelector('input[name="alcance"][value="predio"]').checked = true;
   document.getElementById("buscador").hidden = false;
@@ -245,25 +273,27 @@ function limpiarSeleccion() {
 
 function odActual() {
   const p = ESTADO.predio;
-  return ESTADO.escenario === "obras" ? (p.od_obras || p.od_base || []) : (p.od_base || []);
+  const d = ESTADO.frag.lotes[p.lote] || {};
+  return ESTADO.escenario === "obras" ? (d.obras || d.base || []) : (d.base || []);
 }
 
 function dibujarSeleccion(ajustar) {
   const p = ESTADO.predio;
-  const vec = PREDIOS.vecindad[p.mz] || [p.mz];
+  const vec = INDICE.vecindad[p.mz] || [p.mz];
   mapa.setPaintProperty("lotes", "fill-opacity", ["case", ["in", ["get", "manzana"], ["literal", vec]], 0.9, 0.12]);
   const mz = MANZANAS.features.filter((f) => vec.includes(f.properties.codigo));
   mapa.getSource("sel-vecindad").setData({ type: "FeatureCollection", features: mz });
-  mapa.getSource("sel-lote").setData({ type: "FeatureCollection", features: LOTES.features.filter((f) => f.properties.codigo === p.lote) });
+  const f = LOTE_POR_CODIGO.get(p.lote);
+  mapa.getSource("sel-lote").setData({ type: "FeatureCollection", features: f ? [f] : [] });
   const origen = centroLote(p.lote);
   const od = odActual();
-  const est = (i) => [PREDIOS.establecimientos[i].lon, PREDIOS.establecimientos[i].lat];
+  const est = (i) => [INDICE.establecimientos[i].lon, INDICE.establecimientos[i].lat];
   mapa.getSource("sel-od").setData({ type: "FeatureCollection", features: od.map(([i, d]) => ({ type: "Feature",
     properties: { cerca: d <= UMBRAL ? 1 : 0 }, geometry: { type: "LineString", coordinates: [origen, est(i)] } })) });
   mapa.getSource("sel-est").setData({ type: "FeatureCollection", features: od.map(([i, d]) => ({ type: "Feature",
     properties: { cerca: d <= UMBRAL ? 1 : 0 }, geometry: { type: "Point", coordinates: est(i) } })) });
   if (ajustar) {
-    const pts = mz.flatMap((f) => (f.geometry.type === "Polygon" ? f.geometry.coordinates[0] : f.geometry.coordinates.flatMap((q) => q[0])));
+    const pts = mz.flatMap((q) => (q.geometry.type === "Polygon" ? q.geometry.coordinates[0] : q.geometry.coordinates.flatMap((r) => r[0])));
     const caja = pts.reduce((b, q) => b.extend(q), new maplibregl.LngLatBounds(origen, origen));
     mapa.fitBounds(caja, { padding: 50, duration: 600 });
   }
@@ -274,8 +304,9 @@ function fichaPredio() {
   const r = (ESTADO.escenario === "obras" ? p.obras : p.base) || {};
   const od = odActual();
   const cerca = od.filter(([, d]) => d <= UMBRAL).length;
-  const fila = ([i, d]) => `<div class="est ${d > UMBRAL ? "lejos" : ""}" data-est="${i}"><span>${esc(PREDIOS.establecimientos[i].nombre || "Sin nombre")}
-    <small class="nota">${esc(PREDIOS.establecimientos[i].categoria)}</small></span><i>${d} m &middot; ${Math.round(d / 1.25 / 60)} min</i></div>`;
+  const hermanos = ESTADO.frag.predios.filter((x) => x.lote === p.lote && x.chip !== p.chip);
+  const fila = ([i, d]) => `<div class="est ${d > UMBRAL ? "lejos" : ""}" data-est="${i}"><span>${esc(INDICE.establecimientos[i].nombre || "Sin nombre")}
+    <small class="nota">${esc(INDICE.establecimientos[i].categoria)}</small></span><i>${d} m &middot; ${Math.round(d / 1.25 / 60)} min</i></div>`;
   document.getElementById("ficha").innerHTML = `<h2>Predio seleccionado</h2>
     <b>${esc(p.dir || "Sin dirección")}</b>
     <div class="nota">CHIP ${esc(p.chip)} &middot; lote ${esc(p.lote)} &middot; manzana ${esc(p.mz)} &middot; estrato ${p.estrato || "sin dato"}</div>
@@ -284,12 +315,16 @@ function fichaPredio() {
     <div class="nota">Establecimiento más cercano: ${r.acc == null ? "ninguno alcanzable" : num(r.acc, 0) + " m"} &middot; ${r.cat ?? 0} categorías en el umbral.
       Distancia del lote a la red: ${num(p.acceso_m)} m. Las líneas del mapa son rectas de referencia; las distancias son por la red peatonal.</div>
     ${r.nota ? `<div class="nota"><b>Nota:</b> ${esc(r.nota)}</div>` : ""}
+    ${hermanos.length ? `<h2>Otros predios del lote (${hermanos.length})</h2>${hermanos.slice(0, 12).map((h) => `<div class="est" data-chip="${esc(h.chip)}"><span>${esc(h.dir || h.chip)}</span><i>${esc(h.chip)}</i></div>`).join("")}` : ""}
     <h2>Establecimientos en su vecindad (${od.length})</h2>${od.map(fila).join("") || '<div class="nota">Ninguno alcanzable por la red.</div>'}
-    <p class="nota"><a href="#" id="volver-zona">Volver a toda la zona</a></p>`;
+    <p class="nota"><a href="#" id="volver-zona">Volver a toda la localidad</a></p>`;
   dibujarSeleccion(false);
 }
 
 function iniciarSeleccion() {
+  LOTE_POR_CODIGO = new Map(LOTES.features.map((f) => [f.properties.codigo, f]));
+  LOTE_POR_CHIP = new Map();
+  INDICE.lotes.forEach((l) => l[3].forEach((c) => LOTE_POR_CHIP.set(c, l)));
   ["sel-vecindad", "sel-lote", "sel-od", "sel-est"].forEach((id) => mapa.addSource(id, { type: "geojson", data: { type: "FeatureCollection", features: [] } }));
   mapa.addLayer({ id: "sel-vecindad", type: "line", source: "sel-vecindad", paint: { "line-color": "#1e6f5c", "line-width": 2.2 } });
   mapa.addLayer({ id: "sel-od", type: "line", source: "sel-od", paint: { "line-color": ["case", ["==", ["get", "cerca"], 1], "#1e6f5c", "#9aa5a8"],
@@ -304,7 +339,7 @@ function iniciarSeleccion() {
     if (ESTADO.alcance === "zona") limpiarSeleccion();
   });
   document.getElementById("q").addEventListener("input", (e) => buscar(e.target.value));
-  document.getElementById("resultados").addEventListener("click", (e) => { const li = e.target.closest("li[data-chip]"); if (li) seleccionar(li.dataset.chip); });
+  document.getElementById("resultados").addEventListener("click", (e) => { const li = e.target.closest("li[data-lote]"); if (li) seleccionar(null, li.dataset.lote); });
   document.getElementById("ficha").addEventListener("click", (e) => {
     if (e.target.id === "volver-zona") {
       e.preventDefault();
@@ -314,19 +349,14 @@ function iniciarSeleccion() {
       limpiarSeleccion();
       return;
     }
+    const otro = e.target.closest("[data-chip]");
+    if (otro) { seleccionar(otro.dataset.chip); return; }
     const fila = e.target.closest(".est");
-    if (fila) { const s = PREDIOS.establecimientos[fila.dataset.est]; mapa.flyTo({ center: [s.lon, s.lat], zoom: 18 }); }
+    if (fila && fila.dataset.est) { const s = INDICE.establecimientos[fila.dataset.est]; mapa.flyTo({ center: [s.lon, s.lat], zoom: 18 }); }
   });
   document.body.addEventListener("click", (e) => {
     const b = e.target.closest("button.ir");
-    if (!b) return;
-    const ps = PREDIOS.predios.filter((x) => x.lote === b.dataset.lote);
-    if (!ps.length) return;
-    seleccionar(ps[0].chip);
-    if (ps.length > 1) {                           // varios predios en el lote (propiedad horizontal): se listan para elegir otro
-      document.getElementById("q").value = b.dataset.lote;
-      buscar(b.dataset.lote);
-    }
+    if (b) seleccionar(null, b.dataset.lote);
   });
 }
 
@@ -340,10 +370,10 @@ mapa.on("load", async () => {
     return;
   }
   try {
-    const [lotes, ...resto] = await Promise.all(["lotes", ...CAPAS.map((c) => c.id)].map(cargar));
+    const [lotes, ...resto] = await Promise.all(["lotes", ...CAPAS.map((c) => (c.lazy ? Promise.resolve({ type: "FeatureCollection", features: [] }) : cargar(c.id)))].map((x) => (typeof x === "string" ? cargar(x) : x)));
     LOTES = lotes;
     MANZANAS = resto[CAPAS.findIndex((c) => c.id === "manzanas")];
-    PREDIOS = await (await fetch("data/predios.json")).json();
+    INDICE = await (await fetch("data/predios_indice.json")).json();
     mapa.addSource("lotes", { type: "geojson", data: lotes });
     mapa.addLayer({ id: "lotes", type: "fill", source: "lotes", paint: { "fill-color": colorLotes(), "fill-opacity": 0.85, "fill-outline-color": "#ffffff" } });
     CAPAS.forEach((c, i) => agregarCapa(c, resto[i]));

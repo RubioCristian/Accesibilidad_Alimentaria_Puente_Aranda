@@ -13,7 +13,8 @@ CREATE TABLE analisis.escenario (
   descripcion         text,
   umbral_cobertura_m  numeric NOT NULL DEFAULT 800 CHECK (umbral_cobertura_m > 0),
   velocidad_peaton_ms numeric NOT NULL DEFAULT 1.25 CHECK (velocidad_peaton_ms > 0),
-  bloquea_obras       boolean NOT NULL DEFAULT false
+  bloquea_obras       boolean NOT NULL DEFAULT false,
+  distancia_maxima_m  numeric NOT NULL DEFAULT 2000 CHECK (distancia_maxima_m > 0)   -- alcance de busqueda por la red
 );
 
 CREATE TABLE analisis.criterio_analitico (
@@ -120,7 +121,7 @@ BEGIN
   INSERT INTO analisis.ejecucion_analisis (escenario_id, version_codigo, parametros)
   VALUES (p_escenario, p_version, jsonb_build_object(
     'manzanas_vecindad', esc.manzanas_vecindad, 'umbral_cobertura_m', esc.umbral_cobertura_m,
-    'velocidad_peaton_ms', esc.velocidad_peaton_ms, 'bloquea_obras', esc.bloquea_obras,
+    'velocidad_peaton_ms', esc.velocidad_peaton_ms, 'distancia_maxima_m', esc.distancia_maxima_m, 'bloquea_obras', esc.bloquea_obras,
     'pesos', jsonb_build_object('accesibilidad', w_acc, 'cobertura', w_cob, 'diversidad', w_div, 'vulnerabilidad', w_vul)))
   RETURNING id INTO v_ejec;
 
@@ -140,10 +141,12 @@ BEGIN
                            || 'JOIN movilidad.obra o ON o.id = oa.obra_id WHERE o.estado = ''en ejecucion'')';
   END IF;
   DROP TABLE IF EXISTS _costo;
+  -- Costos desde cada establecimiento hacia los nodos de la red dentro del alcance maximo (la red no es dirigida,
+  -- asi que la distancia establecimiento -> nodo es la de nodo -> establecimiento).
   EXECUTE format(
-    'CREATE TEMP TABLE _costo AS SELECT start_vid, end_vid, agg_cost FROM pgr_dijkstraCost(%L,
-       (SELECT array_agg(DISTINCT nodo_id) FROM movilidad.punto_acceso),
-       (SELECT array_agg(DISTINCT nodo_id) FROM movilidad.acceso_establecimiento), false)', v_aristas);
+    'CREATE TEMP TABLE _costo AS SELECT start_vid AS end_vid, node AS start_vid, agg_cost FROM pgr_drivingDistance(%L,
+       (SELECT array_agg(DISTINCT nodo_id) FROM movilidad.acceso_establecimiento), %s, false, false)',
+    v_aristas, esc.distancia_maxima_m);
   CREATE INDEX ON _costo (start_vid, end_vid);
 
   -- Manzana de cada establecimiento: la que lo contiene o, si cae en via, la mas cercana.

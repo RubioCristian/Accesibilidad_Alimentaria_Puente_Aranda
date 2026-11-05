@@ -28,7 +28,13 @@ UNION ALL SELECT 'manzanas con lotes y sin estrato', count(*) FROM territorio.ma
   WHERE EXISTS (SELECT 1 FROM territorio.lote l WHERE l.manzana_id = m.id) AND NOT EXISTS (SELECT 1 FROM social.estrato e WHERE e.manzana_id = m.id)
 UNION ALL SELECT 'establecimientos sin acceso a la red', count(*) FROM alimentos.establecimiento e WHERE NOT EXISTS (SELECT 1 FROM movilidad.acceso_establecimiento a WHERE a.establecimiento_id = e.id)
 UNION ALL SELECT 'usos con area desconocida (dato faltante)', count(*) FROM territorio.uso_construccion WHERE area_uso IS NULL
-UNION ALL SELECT 'aristas sin anden ni conexion', count(*) FROM movilidad.arista_red WHERE anden_id IS NULL AND conexion_id IS NULL
+UNION ALL SELECT 'aristas de malla vial sin via asociada', count(*) FROM movilidad.arista_red WHERE origen = 'malla vial' AND via_id IS NULL
+UNION ALL SELECT 'predios con acceso a la red a mas de 100 m', count(*) FROM movilidad.punto_acceso WHERE distancia_acceso > 100
+UNION ALL SELECT 'predios fuera del componente principal de la red', count(*) FROM movilidad.punto_acceso pa
+  JOIN (SELECT node, component FROM pgr_connectedComponents('SELECT id, origen_id AS source, destino_id AS target, longitud AS cost FROM movilidad.arista_red')) c
+    ON c.node = pa.nodo_id
+  WHERE c.component <> (SELECT component FROM pgr_connectedComponents('SELECT id, origen_id AS source, destino_id AS target, longitud AS cost FROM movilidad.arista_red')
+                        GROUP BY component ORDER BY count(*) DESC LIMIT 1)
 UNION ALL SELECT 'lotes prediales que cruzan una via (>2 m)', count(DISTINCT l.id) FROM territorio.lote l
   JOIN movilidad.via v ON ST_Intersects(l.geom, v.geom) AND ST_Length(ST_Intersection(l.geom, v.geom)) > 2 WHERE l.tipo = 'predial'
 UNION ALL SELECT 'lotes prediales fuera de su manzana (>1 m2)', count(*) FROM territorio.lote l

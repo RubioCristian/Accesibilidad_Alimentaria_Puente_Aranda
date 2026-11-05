@@ -30,13 +30,17 @@ def consulta_arcgis(url, where="1=1", campos="*", geometria=False, extra=None, p
             "resultOffset": desplazamiento, "resultRecordCount": pagina,
         }
         datos.update(extra or {})
-        for intento in range(4):
-            r = requests.post(url + "/query", data=datos, timeout=120)
-            if r.status_code == 200 and '"error"' not in r.text[:200]:
-                break
-            time.sleep(2 * (intento + 1))
+        for intento in range(8):
+            try:
+                r = requests.post(url + "/query", data=datos, timeout=90)
+                if r.status_code == 200 and '"error"' not in r.text[:200]:
+                    break
+                detalle = f"{r.status_code} {r.text[:200]}"
+            except requests.RequestException as e:      # cortes de red o tiempos de espera: se reintenta
+                detalle = str(e)[:200]
+            time.sleep(min(60, 4 * (intento + 1)))
         else:
-            raise RuntimeError(f"Fallo consultando {url}: {r.status_code} {r.text[:200]}")
+            raise RuntimeError(f"Fallo consultando {url}: {detalle}")
         js = r.json()
         feats = js.get("features", [])
         for f in feats:

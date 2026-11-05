@@ -38,11 +38,11 @@ INSERT INTO territorio.lote (codigo, manzana_id, fuente_id, fecha_carga, geom)
 SELECT l.codigo_lote, m.id, (SELECT id FROM crudo.fuente_dato WHERE nombre = 'Catastro - Lote'),
        (SELECT fecha_descarga FROM crudo.fuente_dato WHERE nombre = 'Catastro - Lote'),
        ST_Multi(ST_MakeValid(l.geom))
-FROM crudo.legado_lotes l JOIN territorio.manzana m ON m.codigo = l.codigo_manzana;
+FROM crudo.lote_catastro l JOIN territorio.manzana m ON m.codigo = l.codigo_manzana;
 
 -- Lotes que no son predios: Catastro entrega "lotes" de via y espacio publico (codigo 09x, destino 65, sin
 -- construccion). Se detectan porque quedan fuera de su manzana (mas de la mitad de su area) o, en las esquinas
--- que si quedan dentro, por el sufijo 090-099 del codigo. Regla empirica verificada en la zona cargada:
+-- que si quedan dentro, por el sufijo 090-099 del codigo. Regla empirica verificada (zona piloto, 76 manzanas):
 -- los 39 lotes 09x tienen destino 65 y ninguna construccion. No entran al analisis.
 UPDATE territorio.lote l SET tipo = 'via_espacio_publico'
 FROM territorio.manzana m
