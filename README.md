@@ -26,10 +26,12 @@ Fases del cargador (`Scripts/loader/run.py`): `base` (SQL 00-01) → `cargas` (A
 
 ### Montar todo con un solo comando (PowerShell)
 
+`montar.ps1` usa Docker o Podman, el que encuentre (Docker primero). Si no hay ninguno, instala **Docker Desktop con winget** (pide permisos de administrador y, si Windows lo exige, un reinicio; tras reiniciar se vuelve a ejecutar el script). Los demás comandos del README funcionan igual cambiando `podman` por `docker`.
+
 ```powershell
-.montar.ps1               # levanta base y visor desde el respaldo final
-.montar.ps1 -Limpiar      # borra el volumen y restaura de nuevo
-.montar.ps1 -Regenerar    # ademas descarga, modela, analiza y exporta (horas)
+.\montar.ps1               # levanta base y visor desde el respaldo final
+.\montar.ps1 -Limpiar      # borra el volumen y restaura de nuevo
+.\montar.ps1 -Regenerar    # ademas descarga, modela, analiza y exporta (horas)
 ```
 
 ## Estructura
