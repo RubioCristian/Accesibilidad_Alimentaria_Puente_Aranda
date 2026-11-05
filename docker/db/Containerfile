@@ -1,0 +1,6 @@
+FROM docker.io/pgrouting/pgrouting:18-3.6-4.0
+# PostGIS + pgRouting + SFCGAL vienen en la imagen base; se agrega la extension http
+# que usan los procedimientos del backup original.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends postgresql-18-http \
+ && rm -rf /var/lib/apt/lists/*
