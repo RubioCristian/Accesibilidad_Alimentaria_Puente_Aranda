@@ -58,7 +58,7 @@ def fecha_ms(valor):
 
 def registrar_fuente(cur, nombre, entidad, url, licencia, cobertura, escala, limitaciones):
     cur.execute(
-        """INSERT INTO crudo.fuente_dato (nombre, entidad, url, fecha_descarga, licencia, cobertura, escala, limitaciones)
+        """INSERT INTO staging.fuente_dato (nombre, entidad, url, fecha_descarga, licencia, cobertura, escala, limitaciones)
            VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
            ON CONFLICT (nombre) DO UPDATE SET entidad=EXCLUDED.entidad, url=EXCLUDED.url,
              fecha_descarga=EXCLUDED.fecha_descarga, licencia=EXCLUDED.licencia,

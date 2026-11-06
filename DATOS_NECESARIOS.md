@@ -2,7 +2,7 @@
 
 Actualizado el 2026-11-05. Estado verificado consultando los servicios en vivo. **Cargado en la base** (zona de 76 manzanas): predio, estrato, obras y GTFS; ver `README.md`. Requisitos: `Taller 10 - Bases de Datos Espaciales.pdf` y el ER en `taller10/diagramas`.
 
-Para cada dato registrar en la bitácora: **organización, URL, licencia, fecha de descarga, cobertura, escala y limitaciones** (columnas de `crudo.fuente_dato`).
+Para cada dato registrar en la bitácora: **organización, URL, licencia, fecha de descarga, cobertura, escala y limitaciones** (columnas de `staging.fuente_dato`).
 
 Leyenda: ✅ servicio verificado y con datos · ⚠️ parcial o por confirmar · ❌ sin fuente confirmada.
 
@@ -40,7 +40,7 @@ Base Catastro: `https://serviciosgis.catastrobogota.gov.co/arcgis/rest/services/
 | 3.3 | Plazas de mercado | ✅ | Datos Abiertos Bogotá (CSV): <https://datosabiertos.bogota.gov.co/dataset/fd2a6046-5cc3-4acd-81ac-03fe5ef7d549/resource/910e4895-21c3-43b9-84c4-ed40f7e5409e/download/plazas-de-mercado.csv> | Hay versiones 2023 y 2024 |
 | 3.4 | Restaurantes y bares | ⚠️ | Datos Abiertos Bogotá, "Establecimiento de gastronomía y bar" (GeoJSON 2023) | Decidir si cuentan como oferta alimentaria |
 | 3.5 | Comercio como proxy | ✅ | Tabla de predio (1.4), usos 003/004/039/040 (comercio), 056/060 (restaurantes), 066 (plazas) | No distingue tiendas de alimentos de otro comercio |
-| 3.6 | **Comedores comunitarios (SDIS)** | ⚠️ | Datos Abiertos Bogotá, dataset "Comedor Bogotá D.C." (GPKG y GeoJSON) | Última actualización registrada: dic-2020. Pedir versión vigente a SDIS |
+| 3.6 | **Comedores comunitarios (SDIS)** | ✅ incorporado | `https://geovisor.sdis.gov.co/server/rest/services/Oferta_de_Servicios_Sociales/MapServer/16` | Servicio vivo de la SDIS (validado 2026-11-05): 142 comedores en Bogotá, **4 en Puente Aranda** (Muzú-Tejar, Colón, Puente Aranda y Cundinamarca), filtrados con `LocNombre='PUENTE ARANDA'` (el filtro por `LocCodigo` falla). Más reciente que las copias de Datos Abiertos (dic-2020). La capa no declara fecha de actualización ni licencia. Se cargan con `Scripts/loader/sdis.py` y entran como categoría `Comedor comunitario` |
 | 3.7 | **Mercados campesinos / móviles** | ❌ | IPES (Instituto para la Economía Social), Secretaría de Desarrollo Económico | No se encontró dataset georreferenciado |
 | 3.8 | **Oferta informal (venta ambulante)** | ❌ | IPES (registro de vendedores informales) | No se encontró dataset abierto |
 | 3.9 | **Precios (asequibilidad)** | ❌ | DANE, SIPSA (precios mayoristas, Corabastos) | Es mayorista, no minorista. Para precio minorista habría que consultar DANE o Desarrollo Económico |
@@ -64,7 +64,7 @@ Base Catastro: `https://serviciosgis.catastrobogota.gov.co/arcgis/rest/services/
 | 4.6 | Rutas troncales | ✅ | `.../Troncal/consulta_rutas_troncales/MapServer/0` | |
 | 4.7 | Paraderos SITP | ✅ | `.../Zonal/consulta_paraderos_zonales/MapServer/0` | |
 | 4.8 | Rutas zonales SITP | ✅ | `.../Zonal/consulta_rutas_zonales/MapServer/0` | |
-| 4.9 | **Relación ruta–estación/paradero y orden** | ✅ GTFS 2026-04-29 cargado (`crudo.gtfs_*`, `movilidad.ruta_estacion_*`) | GTFS estático de TransMilenio/SITP (paradas, rutas, viajes, horarios) | Hay copias en Tumi Data (2020–2022) y se publica en datos abiertos de Movilidad Bogotá y datos.gov.co. Buscar la versión más reciente y verificar licencia. Alternativa: derivar por cercanía espacial |
+| 4.9 | **Relación ruta–estación/paradero y orden** | ✅ GTFS 2026-04-29 cargado (`staging.gtfs_*`, `movilidad.ruta_estacion_*`) | GTFS estático de TransMilenio/SITP (paradas, rutas, viajes, horarios) | Hay copias en Tumi Data (2020–2022) y se publica en datos abiertos de Movilidad Bogotá y datos.gov.co. Buscar la versión más reciente y verificar licencia. Alternativa: derivar por cercanía espacial |
 | 4.10 | Obras | ✅ | `gestionpublica/obraspublicas/MapServer/0` | Multipunto. `LOCALIDAD=16`: 90 obras. `ESTADO`: 1 en ejecución, 2 ejecutado, 3 lo que viene |
 | 4.11 | Capas del visor de TransMilenio | ✅ | `https://services5.arcgis.com/9unqgkQ8KCOfnzoB/arcgis/rest/services/Mapa_GeoVisor_TransmiGIS/FeatureServer` | Biciestaciones (12), trazado troncal (5), metro (6, 8), cable (11, 14), zonas SITP (18). Solo se probaron las capas 6 y 8 |
 | 4.12 | API interna del buscador de rutas | ⚠️ | `api.buscador-rutas.transmilenio.gov.co` | Responde 403 (no pública). No usar sin autorización |
@@ -98,7 +98,7 @@ Catálogo de datos, diccionario de datos e indicadores, script reproducible en P
 ## Prioridad sugerida
 1. **Población por manzana** (2.1): es lo único que bloquea la demanda.
 2. **GTFS o relación ruta–estación** (4.9).
-3. **Oferta no cubierta**: comedores (3.6), mercados campesinos e informales (3.7, 3.8), precios (3.9).
+3. **Oferta no cubierta**: mercados campesinos e informales (3.7, 3.8), precios (3.9).
 4. **Vulnerabilidad** (2.3).
 5. **Decisiones** de la sección 5 antes del modelo multicriterio.
 6. **LADM-COL** (sección 6) al final.

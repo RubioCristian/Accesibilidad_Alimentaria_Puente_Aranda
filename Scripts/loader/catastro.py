@@ -9,21 +9,21 @@ URL_OBRAS = f"{BASE_CATASTRO}/gestionpublica/obraspublicas/MapServer/0"
 CAMPOS_PREDIO = ("OBJECTID,PRECHIP,BARMANPRE,PRENUPRE,PRECLASE,PRECDESTIN,PRECUSO,PREAUSO,PREATERRE,"
                  "PREACONST,PREUVIVIEN,PREUCALIF,PREDIRECC,PREVACTUAL")
 CAJA_ZONA = ("SELECT st_xmin(e),st_ymin(e),st_xmax(e),st_ymax(e) FROM "
-             "(SELECT st_envelope(st_transform(geom,4326)) e FROM crudo.cobertura_cargada) s")
+             "(SELECT st_envelope(st_transform(geom,4326)) e FROM staging.cobertura_cargada) s")
 
 
 def cargar_predio(con):
-    """Incremental y reanudable: solo pide los lotes que aun no tienen filas (para recargar todo, TRUNCATE crudo.predio_catastro)."""
+    """Incremental y reanudable: solo pide los lotes que aun no tienen filas (para recargar todo, TRUNCATE staging.predio_catastro)."""
     cur = con.cursor()
-    cur.execute("""SELECT l.codigo_lote FROM crudo.lote_catastro l
-                   WHERE NOT EXISTS (SELECT 1 FROM crudo.predio_catastro p WHERE p.barmanpre = l.codigo_lote) ORDER BY 1""")
+    cur.execute("""SELECT l.codigo_lote FROM staging.lote_catastro l
+                   WHERE NOT EXISTS (SELECT 1 FROM staging.predio_catastro p WHERE p.barmanpre = l.codigo_lote) ORDER BY 1""")
     codigos = [f[0] for f in cur.fetchall()]
     total = 0
     for i in range(0, len(codigos), 100):
         lista = ",".join(f"'{c}'" for c in codigos[i:i + 100])
         for a in consulta_arcgis(URL_PREDIO, f"BARMANPRE IN ({lista})", CAMPOS_PREDIO):
             cur.execute(
-                """INSERT INTO crudo.predio_catastro (objectid, chip, barmanpre, nupre, clase, destino, cod_uso,
+                """INSERT INTO staging.predio_catastro (objectid, chip, barmanpre, nupre, clase, destino, cod_uso,
                      area_uso, area_terreno, area_construida, uso_vivienda, unidad_calificada, direccion,
                      vigencia_actual, atributos) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                    ON CONFLICT (objectid) DO NOTHING""",
@@ -47,14 +47,14 @@ def cargar_estrato(con):
     cur = con.cursor()
     cur.execute(CAJA_ZONA)
     caja = ",".join(str(v) for v in cur.fetchone())
-    cur.execute("TRUNCATE crudo.estrato_poligono")
+    cur.execute("TRUNCATE staging.estrato_poligono")
     total = 0
     extra = {"geometry": caja, "geometryType": "esriGeometryEnvelope", "inSR": 4326,
              "spatialRel": "esriSpatialRelIntersects"}
     for f in consulta_arcgis(URL_ESTRATO, "1=1", "OBJECTID,CODIGO_MANZANA,ESTRATO,FECHA_CAPTURA", True, extra):
         p = f["properties"]
         cur.execute(
-            """INSERT INTO crudo.estrato_poligono VALUES (%s,%s,%s,%s,
+            """INSERT INTO staging.estrato_poligono VALUES (%s,%s,%s,%s,
                ST_Multi(ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(%s),4326),9377)))""",
             (p["OBJECTID"], p["CODIGO_MANZANA"], p["ESTRATO"], fecha_ms(p["FECHA_CAPTURA"]), json.dumps(f["geometry"])),
         )
@@ -68,12 +68,12 @@ def cargar_estrato(con):
 
 def cargar_obras(con):
     cur = con.cursor()
-    cur.execute("TRUNCATE crudo.obra_publica")
+    cur.execute("TRUNCATE staging.obra_publica")
     total = 0
     for f in consulta_arcgis(URL_OBRAS, "LOCALIDAD=16", "*", True):
         p = f["properties"]
         cur.execute(
-            """INSERT INTO crudo.obra_publica VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,
+            """INSERT INTO staging.obra_publica VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,
                ST_Multi(ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(%s),4326),9377)))""",
             (p["OBJECTID"], p["COD_OBRA"], p["OBRA"], p["ENTIDAD"], p["LOCALIDAD"], p["ESTADO"], p["TIPO_OBRA"],
              fecha_ms(p["FECHA_ACTUALIZACION"]), p["UPZ"], json.dumps(f["geometry"])),
