@@ -9,7 +9,7 @@ const COLOR_ESTRATO = { 1: "#d73027", 2: "#fc8d59", 3: "#fee08b", 4: "#d9ef8b", 
 const COLOR_USO = { vivienda: "#8fb8de", comercio: "#f2a541", otro: "#c9c3b6" };
 const COLOR_CAT = {
   "Supermercado": "#c8553d", "Tienda de conveniencia": "#1e6f5c", "Panaderia": "#b8860b",
-  "Fruteria y verduleria": "#5aa02c", "Carniceria": "#8e2a4f", "Plaza de mercado": "#3b4cc0",
+  "Fruteria y verduleria": "#5aa02c", "Carniceria": "#8e2a4f", "Comedor comunitario": "#d4a017", "Plaza de mercado": "#3b4cc0",
 };
 
 const CAPAS = [

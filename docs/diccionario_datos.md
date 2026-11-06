@@ -25,14 +25,15 @@ modelo entidad-relación. Las fechas `fecha_observacion` y `fecha_carga` registr
 | movilidad | estacion_sitp | geom | POINT | 9377 |
 | movilidad | estacion_transmilenio | geom | POINT | 9377 |
 | movilidad | nodo_red | geom | POINT | 9377 |
-| movilidad | obra | geom | MULTIPOLYGON | 9377 |
 | movilidad | obra | geom_punto | MULTIPOINT | 9377 |
+| movilidad | obra | geom | MULTIPOLYGON | 9377 |
 | movilidad | punto_acceso | geom | POINT | 9377 |
 | movilidad | ruta_sitp | geom | LINESTRING | 9377 |
 | movilidad | ruta_transmilenio | geom | LINESTRING | 9377 |
 | movilidad | via | geom | MULTILINESTRING | 9377 |
 | staging | andenes | geom | MULTIPOLYGON | 4326 |
 | staging | cobertura_cargada | geom | POLYGON | 9377 |
+| staging | comedor_comunitario | geom | POINT | 9377 |
 | staging | estrato_poligono | geom | MULTIPOLYGON | 9377 |
 | staging | gtfs_parada | geom | POINT | 9377 |
 | staging | gtfs_ruta | geom | LINESTRING | 9377 |
@@ -43,8 +44,8 @@ modelo entidad-relación. Las fechas `fecha_observacion` y `fecha_carga` registr
 | staging | legado_establecimientos_red_peatonal | punto_establecimiento | POINT | 9377 |
 | staging | legado_localidad | geom | MULTIPOLYGON | 9377 |
 | staging | legado_lotes | geom | MULTIPOLYGON | 9377 |
-| staging | legado_lotes_red_peatonal | punto_acceso | POINT | 9377 |
 | staging | legado_lotes_red_peatonal | punto_red | POINT | 9377 |
+| staging | legado_lotes_red_peatonal | punto_acceso | POINT | 9377 |
 | staging | legado_malla_vial | geom | MULTILINESTRING | 9377 |
 | staging | legado_manzana | geom | MULTIPOLYGON | 9377 |
 | staging | legado_otros_establecimientos_osm | geom | POINT | 9377 |
@@ -488,6 +489,21 @@ Restricciones: **n** `NOT NULL id`; **PK** `PRIMARY KEY (id)`; **UNIQUE** `UNIQU
 | fecha_creacion | timestamp without time zone | sí | CURRENT_TIMESTAMP |  |
 
 Restricciones: **n** `NOT NULL id`; **PK** `PRIMARY KEY (id)`
+
+### `staging.comedor_comunitario`
+
+| Columna | Tipo | Nulo | Por defecto | Descripción |
+|---|---|---|---|---|
+| objectid | integer | no |  |  |
+| unidad_operativa | text | sí |  |  |
+| direccion | text | sí |  |  |
+| horario_atencion | text | sí |  |  |
+| localidad | text | sí |  |  |
+| geom | USER-DEFINED | sí |  |  |
+| fecha_carga | date | sí | CURRENT_DATE |  |
+| atributos | jsonb | sí |  |  |
+
+Restricciones: **n** `NOT NULL objectid`; **PK** `PRIMARY KEY (objectid)`
 
 ### `staging.control_lotes_uso`
 

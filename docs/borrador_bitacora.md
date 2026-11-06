@@ -13,7 +13,7 @@
 3. **Reestructura de la base.** Esquemas `staging`, `territorio`, `social`, `alimentos`, `movilidad`, `analisis`, `interoperabilidad`; scripts numerados `00`–`12`, cargador Python y Podman Compose. Se sustituyó `crudo` por `staging`, nombre que sugiere el taller, en scripts, código y diagramas. Los 9 SQL originales quedan en `Scripts/legacy` sin editar.
 4. **Datos sin fuente (limitaciones).** Población por manzana (el DANE la agrega a mayor nivel), comedores vigentes, mercados campesinos, venta informal, precios minoristas, calidad nutricional y vulnerabilidad distinta del estrato. No se rellenan con cero; la demanda por predio es **inferida**.
 5. **Pesos.** Se reescalaron los del taller sin asequibilidad ni calidad: 0,40 / 0,27 / 0,20 / 0,13 (`docs/indicadores.md`).
-6. **Carga de la localidad completa.** 1 810 manzanas, 39 731 lotes, 81 133 predios, 418 establecimientos, red de 42 750 nodos y 47 286 aristas. Respaldo final de 88 MB en `Backup/`.
+6. **Carga de la localidad completa.** 1 810 manzanas, 39 731 lotes, 81 133 predios, 422 establecimientos, red de 42 750 nodos y 47 286 aristas. Respaldo final de 75 MB (sin la matriz origen-destino, regenerable) en `Backup/`.
 
 ---
 

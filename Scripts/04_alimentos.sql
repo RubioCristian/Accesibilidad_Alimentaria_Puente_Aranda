@@ -6,7 +6,7 @@ CREATE TABLE alimentos.categoria (
   nombre text NOT NULL UNIQUE
 );
 INSERT INTO alimentos.categoria (nombre) VALUES
- ('Carniceria'), ('Fruteria y verduleria'), ('Panaderia'), ('Plaza de mercado'), ('Supermercado'), ('Tienda de conveniencia');
+ ('Carniceria'), ('Comedor comunitario'), ('Fruteria y verduleria'), ('Panaderia'), ('Plaza de mercado'), ('Supermercado'), ('Tienda de conveniencia');
 
 CREATE TABLE alimentos.establecimiento (
   id                serial PRIMARY KEY,
@@ -19,7 +19,7 @@ CREATE TABLE alimentos.establecimiento (
   fecha_carga       date,
   geom              geometry(Point, 9377) NOT NULL
 );
--- Plazas de mercado (Datos Abiertos, SRID 990047) y comercio de OpenStreetMap dentro de la localidad.
+-- Plazas de mercado (Datos Abiertos, SRID 990047), comedores comunitarios de la SDIS y comercio de OpenStreetMap dentro de la localidad.
 -- Una plaza de OSM a menos de 150 m de una plaza oficial se descarta por duplicada.
 CREATE TEMP TABLE _plaza AS
 SELECT p.gid::text AS codigo, p.nombre, ST_Centroid(ST_Transform(ST_SetSRID(p.geom, 990047), 9377)) AS geom
@@ -33,6 +33,10 @@ SELECT x.codigo, x.nombre, c.id,
        f.id, f.fecha_descarga, x.geom
 FROM (SELECT 'plaza-' || codigo AS codigo, nombre, 'Plaza de mercado' AS categoria, geom,
              'Datos Abiertos - Plazas de mercado' AS fuente FROM _plaza
+      UNION ALL
+      SELECT 'comedor-' || c.objectid, c.unidad_operativa, 'Comedor comunitario', c.geom, 'SDIS - Comedores comunitarios'
+      FROM staging.comedor_comunitario c
+      WHERE ST_Intersects(c.geom, (SELECT geom FROM territorio.localidad LIMIT 1))
       UNION ALL
       SELECT 'osm-' || o.tipo_osm || '-' || o.id_osm, o.nombre, o.categoria, o.geom, 'OpenStreetMap - Alimentos'
       FROM staging.osm_elemento o

@@ -40,7 +40,7 @@ Base Catastro: `https://serviciosgis.catastrobogota.gov.co/arcgis/rest/services/
 | 3.3 | Plazas de mercado | ✅ | Datos Abiertos Bogotá (CSV): <https://datosabiertos.bogota.gov.co/dataset/fd2a6046-5cc3-4acd-81ac-03fe5ef7d549/resource/910e4895-21c3-43b9-84c4-ed40f7e5409e/download/plazas-de-mercado.csv> | Hay versiones 2023 y 2024 |
 | 3.4 | Restaurantes y bares | ⚠️ | Datos Abiertos Bogotá, "Establecimiento de gastronomía y bar" (GeoJSON 2023) | Decidir si cuentan como oferta alimentaria |
 | 3.5 | Comercio como proxy | ✅ | Tabla de predio (1.4), usos 003/004/039/040 (comercio), 056/060 (restaurantes), 066 (plazas) | No distingue tiendas de alimentos de otro comercio |
-| 3.6 | **Comedores comunitarios (SDIS)** | ✅ validado, no incorporado al modelo | `https://geovisor.sdis.gov.co/server/rest/services/Oferta_de_Servicios_Sociales/MapServer/16` | Servicio vivo de la SDIS (validado 2026-11-05): 142 comedores en Bogotá, **4 en Puente Aranda** (Muzú-Tejar, Colón, Puente Aranda y Cundinamarca; campos `OSSUOpera`, `OSSDirecc`, `OSSCoorX/Y`, `LocNombre`). Es más reciente que las copias de Datos Abiertos (GPKG/GeoJSON de dic-2020) y coincide con las 142 unidades del proceso de contratación 2026 de la SDIS. La capa no declara fecha de actualización ni licencia. No se cargó a `alimentos.establecimiento`: se dejó como limitación para no rehacer el análisis |
+| 3.6 | **Comedores comunitarios (SDIS)** | ✅ incorporado | `https://geovisor.sdis.gov.co/server/rest/services/Oferta_de_Servicios_Sociales/MapServer/16` | Servicio vivo de la SDIS (validado 2026-11-05): 142 comedores en Bogotá, **4 en Puente Aranda** (Muzú-Tejar, Colón, Puente Aranda y Cundinamarca), filtrados con `LocNombre='PUENTE ARANDA'` (el filtro por `LocCodigo` falla). Más reciente que las copias de Datos Abiertos (dic-2020). La capa no declara fecha de actualización ni licencia. Se cargan con `Scripts/loader/sdis.py` y entran como categoría `Comedor comunitario` |
 | 3.7 | **Mercados campesinos / móviles** | ❌ | IPES (Instituto para la Economía Social), Secretaría de Desarrollo Económico | No se encontró dataset georreferenciado |
 | 3.8 | **Oferta informal (venta ambulante)** | ❌ | IPES (registro de vendedores informales) | No se encontró dataset abierto |
 | 3.9 | **Precios (asequibilidad)** | ❌ | DANE, SIPSA (precios mayoristas, Corabastos) | Es mayorista, no minorista. Para precio minorista habría que consultar DANE o Desarrollo Económico |
@@ -98,7 +98,7 @@ Catálogo de datos, diccionario de datos e indicadores, script reproducible en P
 ## Prioridad sugerida
 1. **Población por manzana** (2.1): es lo único que bloquea la demanda.
 2. **GTFS o relación ruta–estación** (4.9).
-3. **Oferta no cubierta**: comedores (3.6), mercados campesinos e informales (3.7, 3.8), precios (3.9).
+3. **Oferta no cubierta**: mercados campesinos e informales (3.7, 3.8), precios (3.9).
 4. **Vulnerabilidad** (2.3).
 5. **Decisiones** de la sección 5 antes del modelo multicriterio.
 6. **LADM-COL** (sección 6) al final.

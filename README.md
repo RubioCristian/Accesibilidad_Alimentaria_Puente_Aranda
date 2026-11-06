@@ -10,7 +10,7 @@ Requisito: **Podman** (probado con 6.1.4 y `podman-compose` 1.6.0). En Windows o
 podman compose up -d db web      # base en localhost:5433 y visor en http://localhost:8080
 ```
 
-El primer arranque restaura `Backup/alimentos_puente_aranda_final.backup`, o el original si el final no existe (`docker/db/init/10_restaurar_backup.sh`). **El respaldo final (88 MB) trae toda la localidad ya descargada** (staging, modelo, análisis e indicadores), así que no hace falta volver a bajar nada de las fuentes; se probó restaurándolo en una base vacía con conteos idénticos. Solo se descarga de nuevo para actualizar los datos (fases `cargas` en adelante). Si el volumen `pgdata` ya existe, no vuelve a restaurar; `podman compose down -v` lo borra.
+El primer arranque restaura `Backup/alimentos_puente_aranda_final.backup`, o el original si el final no existe (`docker/db/init/10_restaurar_backup.sh`). **El respaldo final (75 MB) trae toda la localidad ya descargada** (staging, modelo, 7 escenarios e indicadores; la matriz origen-destino, 592 MB, se excluye y se regenera con la fase `analisis`), así que no hace falta volver a bajar nada de las fuentes; se probó restaurándolo en una base vacía con conteos idénticos. Solo se descarga de nuevo para actualizar los datos (fases `cargas` en adelante). Si el volumen `pgdata` ya existe, no vuelve a restaurar; `podman compose down -v` lo borra.
 
 Conexión: `psql -h localhost -p 5433 -U postgres alimentos_puente_aranda` (clave por defecto `postgres`; se cambia con `POSTGRES_PASSWORD`, `DB_PORT` y `WEB_PORT` en un `.env`). La clave por defecto es solo para desarrollo local.
 
@@ -22,7 +22,7 @@ podman compose --profile etl run --rm etl                # base, cargas, modelo,
 podman compose --profile etl run --rm etl python -m Scripts.loader.run modelo analisis exportar   # solo SQL + analisis + capas
 ```
 
-Fases del cargador (`Scripts/loader/run.py`): `base` (SQL 00-01) → `cargas` (ArcGIS y GTFS) → `modelo` (SQL 02-10) → `analisis` (un `analisis.ejecutar` por escenario) → `exportar` (GeoJSON y `resumen.json` en `SIG/data`). Los SQL son re-ejecutables sobre la base restaurada de cualquiera de los dos respaldos ; el cargador descarga el GTFS (120 MB) a un volumen de caché y no lo versiona. La fase `cargas` baja la localidad completa (lotes por manzana, malla vial por caja, predios por CHIP, OSM por teselas) y es reanudable; tarda del orden de una hora. El análisis de los dos escenarios tarda ~36 min. Desde el backup original ya no basta con `modelo`: hay que correr antes `cargas`, porque el original solo trae una zona de 76 manzanas.
+Fases del cargador (`Scripts/loader/run.py`): `base` (SQL 00-01) → `cargas` (ArcGIS y GTFS) → `modelo` (SQL 02-10) → `analisis` (un `analisis.ejecutar` por escenario) → `exportar` (GeoJSON y `resumen.json` en `SIG/data`). Los SQL son re-ejecutables sobre la base restaurada de cualquiera de los dos respaldos ; el cargador descarga el GTFS (120 MB) a un volumen de caché y no lo versiona. La fase `cargas` baja la localidad completa (lotes por manzana, malla vial por caja, predios por CHIP, OSM por teselas) y es reanudable; tarda del orden de una hora. El análisis de los siete escenarios tarda ~2,5 h (~22 min cada uno). Desde el backup original ya no basta con `modelo`: hay que correr antes `cargas`, porque el original solo trae una zona de 76 manzanas.
 
 ### Montar todo con un solo comando (PowerShell)
 
@@ -104,7 +104,7 @@ Detalle y estado en `DATOS_NECESARIOS.md`; el catálogo completo, con fechas y l
 
 ## Resultado actual (localidad completa)
 
-1 810 manzanas · 39 731 lotes (38 675 prediales y 1 056 de vía/espacio público) · 81 133 predios (CHIP) · 136 128 usos · 418 establecimientos · red de 42 750 nodos y 47 286 aristas derivada de la malla vial · ~605 mil pares predio-establecimiento por escenario · 1 273 paradas, 587 rutas · 90 obras (8 en ejecución, 4 tocan la red). ICA medio base 57,6 (máx. 96); 1 320 predios no alcanzan ningún establecimiento a ≤ 2 km por red (su acceso queda como el peor). El escenario `con_obras` cambia el ICA de 1 735 predios (diferencia media 10,3 puntos).
+1 810 manzanas · 39 731 lotes (38 675 prediales y 1 056 de vía/espacio público) · 81 133 predios (CHIP) · 136 128 usos · 422 establecimientos · red de 42 750 nodos y 47 286 aristas derivada de la malla vial · ~605 mil pares predio-establecimiento por escenario · 1 273 paradas, 587 rutas · 90 obras (8 en ejecución, 4 tocan la red). ICA medio base 56,3 (máx. 93,2); 1 320 predios no alcanzan ningún establecimiento a ≤ 2 km por red (su acceso queda como el peor). El escenario `con_obras` cambia el ICA de 1 735 predios (diferencia media 10,0 puntos).
 
 Fechas de descarga de las fuentes (también en `staging.fuente_dato`): Catastro localidad y manzana 2026-10-30; andén 2026-10-31; red POT 2026-11-03; lotes, malla vial, predios, estratificación, obras, OSM y GTFS 2026-11-05 (GTFS publicado 2026-04-29).
 
@@ -117,9 +117,9 @@ La pestaña *Predio* tiene dos alcances: **toda la localidad** (todos los predio
 - **Bordes:** se cargó la localidad completa y la malla vial 300 m alrededor, pero no los establecimientos de localidades vecinas; los predios del borde tienen menos oferta de la real.
 - **Red:** la red peatonal se deriva de los **ejes de calzada** de la malla vial (no de andenes): camina por el eje y no modela cruces peatonales ni andenes. Los tramos se parten en los accesos de lotes y establecimientos redondeados a 1 m.
 - **Población:** no hay población publicada a nivel manzana ni tamaño de hogar. La demanda por predio es **inferida** (proporcional al área de vivienda) y no se expresa en personas.
-- **Comedores comunitarios:** se validó el servicio vivo de la SDIS (`Oferta_de_Servicios_Sociales/MapServer/16`, 142 comedores en Bogotá y 4 en Puente Aranda), más reciente que las copias de Datos Abiertos de 2020. **No se incorporó al modelo**; la oferta del análisis no incluye comedores y el ICA no los refleja.
+- **Comedores comunitarios:** se incorporaron los 4 comedores de la SDIS en Puente Aranda (servicio vivo `Oferta_de_Servicios_Sociales/MapServer/16`, 142 en Bogotá), más reciente que las copias de Datos Abiertos de 2020. La capa no declara fecha de actualización ni licencia, y los comedores atienden a población en pobreza o vulnerabilidad alimentaria: se cuentan como oferta (asistencia alimentaria) con el mismo peso que cualquier establecimiento, lo que es un supuesto.
 - **Sin fuente confirmada:** mercados campesinos, venta informal, precios minoristas, calidad nutricional y vulnerabilidad distinta del estrato. Los criterios de asequibilidad y calidad no se calculan; sus pesos se reescalaron, sin rellenar con cero.
-- **Oferta:** OSM subestima las tiendas de barrio; el comercio de Catastro no distingue tiendas de alimentos del resto. Hay 418 establecimientos (plazas oficiales y OSM dentro de la localidad), con seis categorías fijas.
+- **Oferta:** OSM subestima las tiendas de barrio; el comercio de Catastro no distingue tiendas de alimentos del resto. Hay 422 establecimientos (plazas oficiales y OSM dentro de la localidad), con seis categorías fijas.
 - **Obras:** vienen como puntos; el área de afectación de 25 m es un supuesto. Solo 4 de las 8 obras en ejecución tocan la red.
 - **Modos:** solo se calcula caminar. El transporte público se muestra (estaciones, paraderos, rutas y orden desde el GTFS) pero no entra al índice. No se usó la bicicleta.
 - **GTFS:** la licencia no viene en el archivo; se cita el publicador y la fecha. Solo se guardan las paradas dentro de la localidad y a ≤ ~900 m; el orden de parada es el menor `stop_sequence` observado.

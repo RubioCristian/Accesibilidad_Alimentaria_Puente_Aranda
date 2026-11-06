@@ -95,3 +95,15 @@ CREATE TABLE IF NOT EXISTS staging.osm_elemento (
 
 CREATE UNIQUE INDEX IF NOT EXISTS predio_catastro_objectid ON staging.predio_catastro (objectid);
 CREATE INDEX IF NOT EXISTS predio_catastro_barmanpre ON staging.predio_catastro (barmanpre);
+
+-- Comedores comunitarios de la SDIS (los llena Scripts/loader/sdis.py).
+CREATE TABLE IF NOT EXISTS staging.comedor_comunitario (
+  objectid         int PRIMARY KEY,
+  unidad_operativa text,
+  direccion        text,
+  horario_atencion text,
+  localidad        text,
+  geom             geometry(Point, 9377),
+  fecha_carga      date DEFAULT current_date,
+  atributos        jsonb
+);
