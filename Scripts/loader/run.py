@@ -1,6 +1,6 @@
 """Flujo completo: SQL 00-01, cargas, SQL 02-09 y exportacion de capas para el visor.
 
-Uso:  python -m Scripts.loader.run [sql|cargas|modelo|exportar ...]   (sin argumentos: todo)
+Uso:  python -m Scripts.loader.run [base|cargas|modelo|analisis|sensibilidad|exportar ...]   (sin argumentos: todo)
 """
 import os
 import sys
@@ -42,6 +42,16 @@ def main(fases):
     if "analisis" in fases:
         version = os.environ.get("CODE_VERSION", "sin-version")
         for (esc,) in con.execute("SELECT id FROM analisis.escenario ORDER BY id").fetchall():
+            ejec = con.execute("SELECT analisis.ejecutar(%s, %s)", (esc, version)).fetchone()[0]
+            con.commit()
+            print(f"escenario {esc}: ejecucion {ejec}", flush=True)
+    if "sensibilidad" in fases:
+        version = os.environ.get("CODE_VERSION", "sin-version")
+        pendientes = con.execute(
+            """SELECT id FROM analisis.escenario e WHERE NOT EXISTS (
+                 SELECT 1 FROM analisis.ejecucion_analisis x WHERE x.escenario_id = e.id AND x.estado = 'completada')
+               ORDER BY id""").fetchall()
+        for (esc,) in pendientes:
             ejec = con.execute("SELECT analisis.ejecutar(%s, %s)", (esc, version)).fetchone()[0]
             con.commit()
             print(f"escenario {esc}: ejecucion {ejec}", flush=True)

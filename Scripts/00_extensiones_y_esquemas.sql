@@ -8,13 +8,14 @@ CREATE EXTENSION IF NOT EXISTS http;
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'staging')
-     AND NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'crudo') THEN
-    ALTER SCHEMA staging RENAME TO crudo;
+  -- Respaldos hechos antes de adoptar el nombre del taller usaban el esquema "crudo".
+  IF EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'crudo')
+     AND NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = 'staging') THEN
+    ALTER SCHEMA crudo RENAME TO staging;
   END IF;
 END $$;
 
-CREATE SCHEMA IF NOT EXISTS crudo;
+CREATE SCHEMA IF NOT EXISTS staging;
 CREATE SCHEMA IF NOT EXISTS territorio;
 CREATE SCHEMA IF NOT EXISTS social;
 CREATE SCHEMA IF NOT EXISTS alimentos;
@@ -22,7 +23,7 @@ CREATE SCHEMA IF NOT EXISTS movilidad;
 CREATE SCHEMA IF NOT EXISTS analisis;
 CREATE SCHEMA IF NOT EXISTS interoperabilidad;
 
--- Las tablas del trabajo anterior pasan a crudo con prefijo legado_ y alimentan el modelo nuevo.
+-- Las tablas del trabajo anterior pasan a staging con prefijo legado_ y alimentan el modelo nuevo.
 -- Las tablas con el mismo nombre en el esquema nuevo se reconstruyen en los scripts 02 a 06.
 DO $$
 DECLARE r record; o record;
@@ -39,9 +40,9 @@ BEGIN
     ) AS t(esquema, tabla)
   LOOP
     IF to_regclass(format('%I.%I', r.esquema, r.tabla)) IS NOT NULL
-       AND to_regclass(format('crudo.legado_%s', r.tabla)) IS NULL THEN   -- ya movida: no se repite
+       AND to_regclass(format('staging.legado_%s', r.tabla)) IS NULL THEN   -- ya movida: no se repite
       EXECUTE format('ALTER TABLE %I.%I RENAME TO %I', r.esquema, r.tabla, 'legado_' || r.tabla);
-      -- los indices y secuencias propios tambien se renombran para no chocar con los de crudo
+      -- los indices y secuencias propios tambien se renombran para no chocar con los de staging
       FOR o IN SELECT indexname AS nombre, 'INDEX' AS tipo FROM pg_indexes
                WHERE schemaname = r.esquema AND tablename = 'legado_' || r.tabla
                UNION ALL
@@ -50,21 +51,21 @@ BEGIN
       LOOP
         EXECUTE format('ALTER %s %I.%I RENAME TO %I', o.tipo, r.esquema, o.nombre, 'legado_' || o.nombre);
       END LOOP;
-      EXECUTE format('ALTER TABLE %I.%I SET SCHEMA crudo', r.esquema, 'legado_' || r.tabla);
+      EXECUTE format('ALTER TABLE %I.%I SET SCHEMA staging', r.esquema, 'legado_' || r.tabla);
     END IF;
   END LOOP;
 
   IF to_regclass('territorio.area_estudio') IS NOT NULL THEN
     ALTER TABLE territorio.area_estudio RENAME TO cobertura_cargada;
-    ALTER TABLE territorio.cobertura_cargada SET SCHEMA crudo;
+    ALTER TABLE territorio.cobertura_cargada SET SCHEMA staging;
   END IF;
   IF to_regclass('public.plaza_mercado_20211229') IS NOT NULL THEN
     ALTER TABLE public.plaza_mercado_20211229 RENAME TO legado_plaza_mercado;
-    ALTER TABLE public.legado_plaza_mercado SET SCHEMA crudo;
+    ALTER TABLE public.legado_plaza_mercado SET SCHEMA staging;
   END IF;
 END $$;
 
-COMMENT ON SCHEMA crudo IS 'Descargas originales, tablas heredadas (legado_*) y catalogo de fuentes';
+COMMENT ON SCHEMA staging IS 'Descargas originales, tablas heredadas (legado_*) y catalogo de fuentes';
 COMMENT ON SCHEMA territorio IS 'Localidad, manzana, lote, predio y uso por construccion';
 COMMENT ON SCHEMA social IS 'Estrato (por manzana) y demanda asumida por predio';
 COMMENT ON SCHEMA alimentos IS 'Categorias y establecimientos de alimentos';

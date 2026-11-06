@@ -75,13 +75,13 @@ def cargar_gtfs(con):
         if p["shape_id"] in formas:
             puntos[p["shape_id"]].append((int(p["shape_pt_sequence"]), p["shape_pt_lon"], p["shape_pt_lat"]))
 
-    for t in ("crudo.gtfs_ruta_parada", "crudo.gtfs_ruta", "crudo.gtfs_parada"):
+    for t in ("staging.gtfs_ruta_parada", "staging.gtfs_ruta", "staging.gtfs_parada"):
         cur.execute(f"TRUNCATE {t}")
     usadas = {p for _, p in pares}
     for i in usadas:
         s = paradas[i]
         cur.execute(
-            """INSERT INTO crudo.gtfs_parada VALUES (%s,%s,%s,%s,
+            """INSERT INTO staging.gtfs_parada VALUES (%s,%s,%s,%s,
                ST_Transform(ST_SetSRID(ST_MakePoint(%s,%s),4326),9377))""",
             (i, s["stop_code"] or None, s["stop_name"], s["zone_id"] or None, s["stop_lon"], s["stop_lat"]),
         )
@@ -90,13 +90,13 @@ def cargar_gtfs(con):
         pts = sorted(puntos.get(forma_de.get(r), []))
         wkt = "LINESTRING(" + ",".join(f"{x} {y}" for _, x, y in pts) + ")" if len(pts) > 1 else None
         cur.execute(
-            """INSERT INTO crudo.gtfs_ruta VALUES (%s,%s,%s,%s,%s,%s,
+            """INSERT INTO staging.gtfs_ruta VALUES (%s,%s,%s,%s,%s,%s,
                ST_Transform(ST_SetSRID(ST_GeomFromText(%s),4326),9377))""",
             (r, info["route_short_name"], info["route_long_name"], int(info["route_type"]),
              info["agency_id"], forma_de.get(r), wkt),
         )
     for (r, p), sec in pares.items():
-        cur.execute("INSERT INTO crudo.gtfs_ruta_parada VALUES (%s,%s,%s)", (r, p, sec))
+        cur.execute("INSERT INTO staging.gtfs_ruta_parada VALUES (%s,%s,%s)", (r, p, sec))
 
     registrar_fuente(cur, "GTFS TransMilenio/SITP 2026-04-29", "TransMilenio S.A.", URL,
                      "Datos abiertos (verificar terminos de uso del publicador)",

@@ -17,7 +17,7 @@ CREATE TABLE movilidad.arista_red (
   via_id            int REFERENCES movilidad.via(id),
   anden_id          int REFERENCES movilidad.anden(id),            -- sin uso: la red no se deriva de andenes
   conexion_id       int REFERENCES movilidad.conexion_peatonal(id), -- sin uso
-  fuente_id         int REFERENCES crudo.fuente_dato(id),
+  fuente_id         int REFERENCES staging.fuente_dato(id),
   fecha_observacion date,
   fecha_carga       date,
   modo              text NOT NULL DEFAULT 'peatonal',
@@ -48,7 +48,7 @@ JOIN _nodo_clave o ON o.k = ST_AsBinary(ST_StartPoint(s.geom))
 JOIN _nodo_clave d ON d.k = ST_AsBinary(ST_EndPoint(s.geom))
 LEFT JOIN LATERAL (SELECT id FROM movilidad.via v WHERE ST_DWithin(v.geom, ST_LineInterpolatePoint(s.geom, 0.5), 0.01)
                    ORDER BY ST_Distance(v.geom, ST_LineInterpolatePoint(s.geom, 0.5)) LIMIT 1) v ON true
-LEFT JOIN crudo.fuente_dato f ON f.nombre = 'Mapa de Referencia - Malla vial'
+LEFT JOIN staging.fuente_dato f ON f.nombre = 'Mapa de Referencia - Malla vial'
 WHERE o.id <> d.id;
 CREATE INDEX ON movilidad.arista_red USING gist (geom);
 CREATE INDEX ON movilidad.arista_red (origen_id);

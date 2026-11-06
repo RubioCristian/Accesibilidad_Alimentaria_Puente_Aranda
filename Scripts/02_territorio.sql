@@ -1,4 +1,4 @@
--- 02: territorio (localidad, manzana, lote, predio, uso_construccion). Se reconstruye desde crudo.
+-- 02: territorio (localidad, manzana, lote, predio, uso_construccion). Se reconstruye desde staging.
 DROP TABLE IF EXISTS territorio.uso_construccion, territorio.predio, territorio.lote,
                      territorio.manzana, territorio.localidad CASCADE;
 
@@ -9,7 +9,7 @@ CREATE TABLE territorio.localidad (
   geom   geometry(MultiPolygon, 9377) NOT NULL CHECK (ST_IsValid(geom))
 );
 INSERT INTO territorio.localidad (codigo, nombre, geom)
-SELECT loccodigo, locnombre, ST_Multi(ST_MakeValid(geom)) FROM crudo.legado_localidad;
+SELECT loccodigo, locnombre, ST_Multi(ST_MakeValid(geom)) FROM staging.legado_localidad;
 
 CREATE TABLE territorio.manzana (
   id           serial PRIMARY KEY,
@@ -20,7 +20,7 @@ CREATE TABLE territorio.manzana (
 INSERT INTO territorio.manzana (codigo, localidad_id, geom)
 -- Se omite 1 manzana sin codigo y, de un codigo repetido, se conserva el poligono de mayor area.
 SELECT DISTINCT ON (m.mancodigo) m.mancodigo, (SELECT id FROM territorio.localidad LIMIT 1), ST_Multi(ST_MakeValid(m.geom))
-FROM crudo.legado_manzana m
+FROM staging.legado_manzana m
 WHERE m.mancodigo IS NOT NULL
 ORDER BY m.mancodigo, ST_Area(m.geom) DESC;
 
@@ -28,17 +28,17 @@ CREATE TABLE territorio.lote (
   id                serial PRIMARY KEY,
   codigo            text NOT NULL UNIQUE,
   manzana_id        int NOT NULL REFERENCES territorio.manzana(id),
-  fuente_id         int REFERENCES crudo.fuente_dato(id),
+  fuente_id         int REFERENCES staging.fuente_dato(id),
   fecha_observacion date,
   fecha_carga       date,
   tipo              text NOT NULL DEFAULT 'predial' CHECK (tipo IN ('predial', 'via_espacio_publico')),
   geom              geometry(MultiPolygon, 9377) NOT NULL CHECK (ST_IsValid(geom))
 );
 INSERT INTO territorio.lote (codigo, manzana_id, fuente_id, fecha_carga, geom)
-SELECT l.codigo_lote, m.id, (SELECT id FROM crudo.fuente_dato WHERE nombre = 'Catastro - Lote'),
-       (SELECT fecha_descarga FROM crudo.fuente_dato WHERE nombre = 'Catastro - Lote'),
+SELECT l.codigo_lote, m.id, (SELECT id FROM staging.fuente_dato WHERE nombre = 'Catastro - Lote'),
+       (SELECT fecha_descarga FROM staging.fuente_dato WHERE nombre = 'Catastro - Lote'),
        ST_Multi(ST_MakeValid(l.geom))
-FROM crudo.lote_catastro l JOIN territorio.manzana m ON m.codigo = l.codigo_manzana;
+FROM staging.lote_catastro l JOIN territorio.manzana m ON m.codigo = l.codigo_manzana;
 
 -- Lotes que no son predios: Catastro entrega "lotes" de via y espacio publico (codigo 09x, destino 65, sin
 -- construccion). Se detectan porque quedan fuera de su manzana (mas de la mitad de su area) o, en las esquinas
@@ -65,7 +65,7 @@ CREATE TABLE territorio.predio (
 INSERT INTO territorio.predio (chip, lote_id, nupre, clase, destino, direccion, area_terreno, area_construida)
 SELECT p.chip, l.id, max(p.nupre), max(p.clase), max(p.destino), max(p.direccion),
        max(p.area_terreno), max(p.area_construida)
-FROM crudo.predio_catastro p JOIN territorio.lote l ON l.codigo = p.barmanpre
+FROM staging.predio_catastro p JOIN territorio.lote l ON l.codigo = p.barmanpre
 WHERE p.chip IS NOT NULL
 GROUP BY p.chip, l.id;
 
@@ -79,7 +79,7 @@ CREATE TABLE territorio.uso_construccion (
 INSERT INTO territorio.uso_construccion (predio_id, codigo_uso, area_uso, es_vivienda)
 -- Catastro usa -1 para area desconocida: se guarda como NULL (dato faltante, no cero).
 SELECT pr.id, p.cod_uso, CASE WHEN p.area_uso >= 0 THEN p.area_uso END, p.uso_vivienda = 'S'
-FROM crudo.predio_catastro p JOIN territorio.predio pr ON pr.chip = p.chip;
+FROM staging.predio_catastro p JOIN territorio.predio pr ON pr.chip = p.chip;
 
 CREATE INDEX ON territorio.manzana USING gist (geom);
 CREATE INDEX ON territorio.lote USING gist (geom);

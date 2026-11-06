@@ -13,7 +13,7 @@ CREATE TABLE movilidad.via (
 );
 INSERT INTO movilidad.via (codigo, tipo, nombre, geom)
 SELECT codigo_vial, coalesce(tipo, 'sin tipo'), nombre_via, ST_Multi(ST_Force2D(ST_MakeValid(geom)))
-FROM crudo.malla_vial_catastro;
+FROM staging.malla_vial_catastro;
 
 CREATE TABLE movilidad.anden (
   id            serial PRIMARY KEY,
@@ -23,7 +23,7 @@ CREATE TABLE movilidad.anden (
   geom          geometry(MultiPolygon, 9377) NOT NULL CHECK (ST_IsValid(geom))
 );
 INSERT INTO movilidad.anden (objectid_orig, codigo, geom)
-SELECT objectid, codigo_anden, ST_Multi(ST_MakeValid(geom)) FROM crudo.legado_andenes;
+SELECT objectid, codigo_anden, ST_Multi(ST_MakeValid(geom)) FROM staging.legado_andenes;
 
 -- Conexion peatonal explicita (cruces, pasos): sin datos en la localidad completa; la red derivada de la malla vial
 -- cruza por las intersecciones. Se conserva la tabla del ER.
@@ -42,7 +42,7 @@ CREATE TABLE movilidad.obra (
   entidad             int,
   estado              text NOT NULL CHECK (estado IN ('en ejecucion', 'ejecutada', 'proxima')),
   fecha_actualizacion date,
-  fuente_id           int REFERENCES crudo.fuente_dato(id),
+  fuente_id           int REFERENCES staging.fuente_dato(id),
   radio_afectacion_m  numeric NOT NULL DEFAULT 25,
   geom_punto          geometry(MultiPoint, 9377) NOT NULL,
   geom                geometry(MultiPolygon, 9377) NOT NULL
@@ -50,9 +50,9 @@ CREATE TABLE movilidad.obra (
 INSERT INTO movilidad.obra (codigo, nombre, entidad, estado, fecha_actualizacion, fuente_id, geom_punto, geom)
 SELECT o.cod_obra, o.obra, o.entidad,
        CASE o.estado WHEN 1 THEN 'en ejecucion' WHEN 2 THEN 'ejecutada' ELSE 'proxima' END,
-       o.fecha_actualizacion, (SELECT id FROM crudo.fuente_dato WHERE nombre = 'Obras publicas'),
+       o.fecha_actualizacion, (SELECT id FROM staging.fuente_dato WHERE nombre = 'Obras publicas'),
        o.geom, ST_Multi(ST_Buffer(o.geom, 25))
-FROM crudo.obra_publica o;
+FROM staging.obra_publica o;
 
 CREATE INDEX ON movilidad.via USING gist (geom);
 CREATE INDEX ON movilidad.anden USING gist (geom);

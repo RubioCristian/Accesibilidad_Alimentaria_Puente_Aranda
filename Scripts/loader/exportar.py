@@ -5,12 +5,12 @@ from decimal import Decimal
 from pathlib import Path
 
 DESTINO = Path(__file__).resolve().parents[2] / "SIG" / "data"
-ZONA = "(SELECT geom FROM crudo.cobertura_cargada LIMIT 1)"
+ZONA = "(SELECT geom FROM staging.cobertura_cargada LIMIT 1)"
 G = "ST_Transform({}, 4326)"
 PRECISION = {"red": 5, "vias": 5}   # decimales de las coordenadas; las capas grandes usan menos
 
 CAPAS = {
-    "cobertura": f"""SELECT jsonb_build_object('nombre', 'Zona cargada'), {G.format('geom')} FROM crudo.cobertura_cargada""",
+    "cobertura": f"""SELECT jsonb_build_object('nombre', 'Zona cargada'), {G.format('geom')} FROM staging.cobertura_cargada""",
     "localidad": f"""SELECT jsonb_build_object('codigo', codigo, 'nombre', nombre),
                             {G.format('ST_SimplifyPreserveTopology(geom, 8)')} FROM territorio.localidad""",
     "manzanas": f"""SELECT jsonb_build_object('codigo', m.codigo, 'estrato', e.estrato),
@@ -44,7 +44,7 @@ CAPAS = {
     "establecimientos": f"""SELECT jsonb_build_object('nombre', e.nombre, 'categoria', c.nombre, 'fuente', f.nombre),
                                    {G.format('e.geom')}
                             FROM alimentos.establecimiento e JOIN alimentos.categoria c ON c.id = e.categoria_id
-                            LEFT JOIN crudo.fuente_dato f ON f.id = e.fuente_id""",
+                            LEFT JOIN staging.fuente_dato f ON f.id = e.fuente_id""",
     "red": f"""SELECT jsonb_build_object('origen', origen), {G.format('geom')} FROM movilidad.arista_red""",
     "vias": f"""SELECT jsonb_build_object('nombre', nombre, 'tipo', tipo), {G.format('geom')} FROM movilidad.via""",
     "estaciones_tm": f"""SELECT jsonb_build_object('nombre', nombre, 'codigo', codigo,
@@ -92,14 +92,14 @@ def exportar(con):
                              t.table_schema, t.table_name), false, true, '')))[1]::text::int
                    FROM information_schema.tables t
                    WHERE t.table_type = 'BASE TABLE'
-                     AND t.table_schema IN ('territorio','social','alimentos','movilidad','analisis','interoperabilidad','crudo')
+                     AND t.table_schema IN ('territorio','social','alimentos','movilidad','analisis','interoperabilidad','staging')
                      AND t.table_name NOT LIKE 'legado\\_%'
                    ORDER BY 1""")
     resumen["tablas"] = [{"tabla": a, "filas": b} for a, b in cur.fetchall()]
     cur.execute("SELECT prueba, falla FROM analisis.v_calidad ORDER BY 1")
     resumen["calidad"] = [{"prueba": a, "falla": b} for a, b in cur.fetchall()]
     cur.execute("""SELECT nombre, entidad, url, fecha_descarga, licencia, cobertura, escala, limitaciones
-                   FROM crudo.fuente_dato ORDER BY id""")
+                   FROM staging.fuente_dato ORDER BY id""")
     cols = [d.name for d in cur.description]
     resumen["fuentes"] = [dict(zip(cols, f)) for f in cur.fetchall()]
     cur.execute("""SELECT e.nombre, e.manzanas_vecindad, e.umbral_cobertura_m, e.velocidad_peaton_ms, e.bloquea_obras, e.descripcion,

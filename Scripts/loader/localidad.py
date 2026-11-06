@@ -11,7 +11,7 @@ URL_LOTE = f"{BASE_CATASTRO}/catastro/lote/MapServer/0"
 URL_MALLA = f"{BASE_CATASTRO}/Mapa_Referencia/Mapa_Referencia/MapServer/13"
 URL_OSM = "https://api.openstreetmap.org/api/0.6/map"
 CAJA_LOCALIDAD = ("SELECT st_xmin(e),st_ymin(e),st_xmax(e),st_ymax(e) FROM "
-                  "(SELECT st_envelope(st_transform(st_buffer(geom, 300), 4326)) e FROM crudo.legado_localidad) s")
+                  "(SELECT st_envelope(st_transform(st_buffer(geom, 300), 4326)) e FROM staging.legado_localidad) s")
 
 # Etiqueta OSM -> categoria del modelo.
 CATEGORIA_OSM = {
@@ -24,26 +24,26 @@ CATEGORIA_OSM = {
 def fijar_cobertura(con):
     """La cobertura cargada es la localidad completa (la usan estrato, GTFS y la exportacion)."""
     cur = con.cursor()
-    cur.execute("DELETE FROM crudo.cobertura_cargada")
-    cur.execute("""INSERT INTO crudo.cobertura_cargada (nombre, descripcion, geom)
+    cur.execute("DELETE FROM staging.cobertura_cargada")
+    cur.execute("""INSERT INTO staging.cobertura_cargada (nombre, descripcion, geom)
                    SELECT 'Localidad 16 - Puente Aranda', 'Localidad completa',
                           (SELECT d.geom FROM ST_Dump(ST_MakeValid(l.geom)) d ORDER BY ST_Area(d.geom) DESC LIMIT 1)
-                   FROM crudo.legado_localidad l""")
+                   FROM staging.legado_localidad l""")
     con.commit()
 
 
 def cargar_lotes(con):
     cur = con.cursor()
-    cur.execute("SELECT mancodigo FROM crudo.legado_manzana WHERE mancodigo IS NOT NULL ORDER BY 1")
+    cur.execute("SELECT mancodigo FROM staging.legado_manzana WHERE mancodigo IS NOT NULL ORDER BY 1")
     manzanas = [f[0] for f in cur.fetchall()]
-    cur.execute("TRUNCATE crudo.lote_catastro")
+    cur.execute("TRUNCATE staging.lote_catastro")
     total = 0
     for i in range(0, len(manzanas), 40):
         lista = ",".join(f"'{m}'" for m in manzanas[i:i + 40])
         for f in consulta_arcgis(URL_LOTE, f"MANZCODIGO IN ({lista})", "OBJECTID,LOTCODIGO,MANZCODIGO", True):
             p = f["properties"]
             cur.execute(
-                """INSERT INTO crudo.lote_catastro (objectid, codigo_lote, codigo_manzana, geom)
+                """INSERT INTO staging.lote_catastro (objectid, codigo_lote, codigo_manzana, geom)
                    VALUES (%s,%s,%s, ST_Multi(ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(%s),4326),9377)))
                    ON CONFLICT (objectid) DO NOTHING""",
                 (p["OBJECTID"], p["LOTCODIGO"], p["MANZCODIGO"], json.dumps(f["geometry"])))
@@ -60,13 +60,13 @@ def cargar_malla_vial(con):
     cur = con.cursor()
     cur.execute(CAJA_LOCALIDAD)
     caja = ",".join(str(v) for v in cur.fetchone())
-    cur.execute("TRUNCATE crudo.malla_vial_catastro")
+    cur.execute("TRUNCATE staging.malla_vial_catastro")
     total = 0
     extra = {"geometry": caja, "geometryType": "esriGeometryEnvelope", "inSR": 4326, "spatialRel": "esriSpatialRelIntersects"}
     for f in consulta_arcgis(URL_MALLA, "1=1", "OBJECTID,MVICODIGO,MVINOMBRE,MVITCLA,MVITIPO", True, extra):
         p = f["properties"]
         cur.execute(
-            """INSERT INTO crudo.malla_vial_catastro (objectid, codigo_vial, nombre_via, clasificacion, tipo, geom)
+            """INSERT INTO staging.malla_vial_catastro (objectid, codigo_vial, nombre_via, clasificacion, tipo, geom)
                VALUES (%s,%s,%s,%s,%s, ST_Multi(ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(%s),4326),9377)))
                ON CONFLICT (objectid) DO NOTHING""",
             (p["OBJECTID"], p["MVICODIGO"], p["MVINOMBRE"], p["MVITCLA"], p["MVITIPO"], json.dumps(f["geometry"])))
@@ -115,9 +115,9 @@ def cargar_osm(con):
             vistos[(el.tag, el.get("id"))] = (el.tag, int(el.get("id")), tags.get("name"), cat, json.dumps(tags), lon, lat)
         print(f"  osm: tesela {k}/25 ({len(vistos)} elementos)", flush=True)
         time.sleep(1)
-    cur.execute("TRUNCATE crudo.osm_elemento")
+    cur.execute("TRUNCATE staging.osm_elemento")
     for v in vistos.values():
-        cur.execute("""INSERT INTO crudo.osm_elemento (tipo_osm, id_osm, nombre, categoria, etiquetas, geom)
+        cur.execute("""INSERT INTO staging.osm_elemento (tipo_osm, id_osm, nombre, categoria, etiquetas, geom)
                        VALUES (%s,%s,%s,%s,%s, ST_Transform(ST_SetSRID(ST_MakePoint(%s,%s),4326),9377))""", v)
     registrar_fuente(cur, "OpenStreetMap - Alimentos", "OpenStreetMap contributors", URL_OSM, "ODbL 1.0",
                      "Localidad 16 (caja + 300 m); filtrado a la localidad al construir el modelo", "Punto",

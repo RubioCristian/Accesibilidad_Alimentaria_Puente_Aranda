@@ -10,7 +10,7 @@ Requisito: **Podman** (probado con 6.1.4 y `podman-compose` 1.6.0). En Windows o
 podman compose up -d db web      # base en localhost:5433 y visor en http://localhost:8080
 ```
 
-El primer arranque restaura `Backup/alimentos_puente_aranda_final.backup`, o el original si el final no existe (`docker/db/init/10_restaurar_backup.sh`). **El respaldo final (88 MB) trae toda la localidad ya descargada** (crudo, modelo, análisis e indicadores), así que no hace falta volver a bajar nada de las fuentes; se probó restaurándolo en una base vacía con conteos idénticos. Solo se descarga de nuevo para actualizar los datos (fases `cargas` en adelante). Si el volumen `pgdata` ya existe, no vuelve a restaurar; `podman compose down -v` lo borra.
+El primer arranque restaura `Backup/alimentos_puente_aranda_final.backup`, o el original si el final no existe (`docker/db/init/10_restaurar_backup.sh`). **El respaldo final (88 MB) trae toda la localidad ya descargada** (staging, modelo, análisis e indicadores), así que no hace falta volver a bajar nada de las fuentes; se probó restaurándolo en una base vacía con conteos idénticos. Solo se descarga de nuevo para actualizar los datos (fases `cargas` en adelante). Si el volumen `pgdata` ya existe, no vuelve a restaurar; `podman compose down -v` lo borra.
 
 Conexión: `psql -h localhost -p 5433 -U postgres alimentos_puente_aranda` (clave por defecto `postgres`; se cambia con `POSTGRES_PASSWORD`, `DB_PORT` y `WEB_PORT` en un `.env`). La clave por defecto es solo para desarrollo local.
 
@@ -42,9 +42,11 @@ Fases del cargador (`Scripts/loader/run.py`): `base` (SQL 00-01) → `cargas` (A
 compose.yaml            db (5433), web (8080, nginx) y etl (perfil "etl")
 docker/db/              imagen pgrouting/pgrouting:18-3.6-4.0 + postgresql-18-http y restauración inicial
 docker/etl/             imagen Python 3.13 del cargador
-Scripts/00..10_*.sql    esquemas, crudo, territorio, social, alimentos, movilidad, analisis, interoperabilidad, vistas y calidad
+Scripts/00..12_*.sql    esquemas, staging, territorio, social, alimentos, movilidad, analisis, interoperabilidad, vistas y calidad, sensibilidad, catalogo
 Scripts/loader/         cargador Python (ArcGIS REST, GTFS) y exportación para el visor
 Scripts/legacy/         los 9 SQL originales del taller, sin editar
+docs/                   catalogo, diccionario, indicadores, limpieza, sensibilidad, interoperabilidad, metodologia y borrador de bitacora
+atlas/                  mapas tematicos (PNG) generados con Scripts/loader/atlas.py
 SIG/                    visor web estático (MapLibre GL 4.7.1 incluido en vendor/) y SIG/data con las capas exportadas
 
 Backup/                 respaldos: original (punto de partida) y final (resultado)
@@ -57,7 +59,7 @@ Cada esquema es un paquete del modelo entidad-relación (`taller10/diagramas/ent
 
 | Esquema | Contenido |
 |---|---|
-| `crudo` | Descargas originales, tablas heredadas (`legado_*`) y `fuente_dato` (catálogo: entidad, URL, fecha, licencia, cobertura, escala, limitaciones) |
+| `staging` | Descargas originales, tablas heredadas (`legado_*`) y `fuente_dato` (catálogo: entidad, URL, fecha, licencia, cobertura, escala, limitaciones) |
 | `territorio` | `localidad`, `manzana`, `lote`, `predio` (un CHIP), `uso_construccion` |
 | `social` | `estrato` (por manzana) y `demanda_predio` (inferida) |
 | `alimentos` | `categoria`, `establecimiento` |
@@ -86,7 +88,7 @@ Decisiones: unidad de análisis = **predio** (distinto del lote); vecindad = la 
 
 ## Datos utilizados
 
-Detalle y estado en `DATOS_NECESARIOS.md`; el catálogo completo, con fechas y licencias, está en `crudo.fuente_dato` y en la pestaña *Fuentes* del visor.
+Detalle y estado en `DATOS_NECESARIOS.md`; el catálogo completo, con fechas y licencias, está en `staging.fuente_dato` y en la pestaña *Fuentes* del visor.
 
 | Dato | Fuente |
 |---|---|
@@ -104,7 +106,7 @@ Detalle y estado en `DATOS_NECESARIOS.md`; el catálogo completo, con fechas y l
 
 1 810 manzanas · 39 731 lotes (38 675 prediales y 1 056 de vía/espacio público) · 81 133 predios (CHIP) · 136 128 usos · 418 establecimientos · red de 42 750 nodos y 47 286 aristas derivada de la malla vial · ~605 mil pares predio-establecimiento por escenario · 1 273 paradas, 587 rutas · 90 obras (8 en ejecución, 4 tocan la red). ICA medio base 57,6 (máx. 96); 1 320 predios no alcanzan ningún establecimiento a ≤ 2 km por red (su acceso queda como el peor). El escenario `con_obras` cambia el ICA de 1 735 predios (diferencia media 10,3 puntos).
 
-Fechas de descarga de las fuentes (también en `crudo.fuente_dato`): Catastro localidad y manzana 2026-10-30; andén 2026-10-31; red POT 2026-11-03; lotes, malla vial, predios, estratificación, obras, OSM y GTFS 2026-11-05 (GTFS publicado 2026-04-29).
+Fechas de descarga de las fuentes (también en `staging.fuente_dato`): Catastro localidad y manzana 2026-10-30; andén 2026-10-31; red POT 2026-11-03; lotes, malla vial, predios, estratificación, obras, OSM y GTFS 2026-11-05 (GTFS publicado 2026-04-29).
 
 ## Consulta desde un predio (visor)
 
@@ -115,14 +117,15 @@ La pestaña *Predio* tiene dos alcances: **toda la localidad** (todos los predio
 - **Bordes:** se cargó la localidad completa y la malla vial 300 m alrededor, pero no los establecimientos de localidades vecinas; los predios del borde tienen menos oferta de la real.
 - **Red:** la red peatonal se deriva de los **ejes de calzada** de la malla vial (no de andenes): camina por el eje y no modela cruces peatonales ni andenes. Los tramos se parten en los accesos de lotes y establecimientos redondeados a 1 m.
 - **Población:** no hay población publicada a nivel manzana ni tamaño de hogar. La demanda por predio es **inferida** (proporcional al área de vivienda) y no se expresa en personas.
-- **Sin fuente confirmada:** comedores comunitarios vigentes (el dataset de SDIS es de 2020), mercados campesinos, venta informal, precios minoristas, calidad nutricional y vulnerabilidad distinta del estrato. Los criterios de asequibilidad y calidad no se calculan; sus pesos se reescalaron, sin rellenar con cero.
+- **Comedores comunitarios:** se validó el servicio vivo de la SDIS (`Oferta_de_Servicios_Sociales/MapServer/16`, 142 comedores en Bogotá y 4 en Puente Aranda), más reciente que las copias de Datos Abiertos de 2020. **No se incorporó al modelo**; la oferta del análisis no incluye comedores y el ICA no los refleja.
+- **Sin fuente confirmada:** mercados campesinos, venta informal, precios minoristas, calidad nutricional y vulnerabilidad distinta del estrato. Los criterios de asequibilidad y calidad no se calculan; sus pesos se reescalaron, sin rellenar con cero.
 - **Oferta:** OSM subestima las tiendas de barrio; el comercio de Catastro no distingue tiendas de alimentos del resto. Hay 418 establecimientos (plazas oficiales y OSM dentro de la localidad), con seis categorías fijas.
 - **Obras:** vienen como puntos; el área de afectación de 25 m es un supuesto. Solo 4 de las 8 obras en ejecución tocan la red.
 - **Modos:** solo se calcula caminar. El transporte público se muestra (estaciones, paraderos, rutas y orden desde el GTFS) pero no entra al índice. No se usó la bicicleta.
 - **GTFS:** la licencia no viene en el archivo; se cita el publicador y la fecha. Solo se guardan las paradas dentro de la localidad y a ≤ ~900 m; el orden de parada es el menor `stop_sequence` observado.
 - **Estrato:** por manzana; el valor 0 (sin estrato) se trata como dato faltante.
 - **Relatividad:** ICA e IPT dependen de la normalización min-max de la localidad y no son comparables con otra zona.
-- **Sensibilidad:** aún no se ejecutaron escenarios con otros pesos o umbrales (el modelo lo permite con nuevas filas en `analisis.escenario`).
+- **Sensibilidad:** se ejecutaron cinco escenarios que cambian un supuesto de `base` (pesos, umbral de 500/1 000 m y vecindad de 15 manzanas); resultados en `docs/sensibilidad.md`. No se varió la velocidad de caminata.
 - **Andenes:** `anden` se conserva como zona pero no entra a la red; `anden.ancho` sin dato.
 - **Topología (validada en `analisis.v_calidad`):** Catastro entrega 1 056 «lotes» de vía y espacio público (sufijo 090–099 o >50 % fuera de su manzana); se marcan `territorio.lote.tipo = 'via_espacio_publico'` y no son predios del análisis ni salen en el visor. Los extremos sueltos de la red a ≤ 2 m de otra arista se unen en el script 06; quedan 57 por revisar. Persisten 190 lotes prediales cruzados por líneas de la malla vial (en su mayoría lotes industriales grandes), 2 lotes prediales fuera de su manzana, 155 lotes sin predio, 7 manzanas sin estrato, 1 predio a más de 100 m de la red y 2 152 usos sin área.
 - **LADM-COL:** solo correspondencias propuestas, por verificar contra el catálogo oficial (Modelo Extendido Catastro-Registro v4.1; Modelo Núcleo v4.0.1).

@@ -1,5 +1,5 @@
 FROM docker.io/library/python:3.13-slim
 RUN apt-get update && apt-get install -y --no-install-recommends postgresql-client && rm -rf /var/lib/apt/lists/*
-RUN pip install --no-cache-dir "psycopg[binary]==3.2.*" requests==2.32.*
+RUN pip install --no-cache-dir "psycopg[binary]==3.2.*" requests==2.32.* matplotlib==3.10.*
 WORKDIR /app
 CMD ["python", "-m", "Scripts.loader.run"]

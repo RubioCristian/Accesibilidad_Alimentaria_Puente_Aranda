@@ -1,4 +1,4 @@
--- 07: movilidad - estaciones y rutas de TransMilenio y SITP (desde el GTFS cargado en crudo).
+-- 07: movilidad - estaciones y rutas de TransMilenio y SITP (desde el GTFS cargado en staging).
 -- Solo entran las paradas a menos de 200 m de un nodo de la red peatonal cargada.
 -- TransMilenio = agencias GTFS 1, 2, 6 y 7 (troncal, alimentadores, dual y cable); SITP = zonales 3, 4 y 5.
 DROP TABLE IF EXISTS movilidad.ruta_estacion_sitp, movilidad.ruta_estacion_tm,
@@ -18,18 +18,18 @@ ALTER TABLE movilidad.estacion_sitp ADD FOREIGN KEY (nodo_id) REFERENCES movilid
 
 CREATE TEMP TABLE _parada_tipo AS
 SELECT DISTINCT rp.stop_id, r.agency_id IN ('1', '2', '6', '7') AS es_tm
-FROM crudo.gtfs_ruta_parada rp JOIN crudo.gtfs_ruta r USING (route_id);
+FROM staging.gtfs_ruta_parada rp JOIN staging.gtfs_ruta r USING (route_id);
 
 INSERT INTO movilidad.estacion_transmilenio (codigo, nodo_id, nombre, distancia_acceso, geom)
 SELECT p.stop_id, n.id, p.stop_name, n.d, p.geom
-FROM crudo.gtfs_parada p
+FROM staging.gtfs_parada p
 JOIN LATERAL (SELECT nr.id, ST_Distance(nr.geom, p.geom) AS d FROM movilidad.nodo_red nr
               ORDER BY nr.geom <-> p.geom LIMIT 1) n ON n.d <= 200
 WHERE p.stop_id IN (SELECT stop_id FROM _parada_tipo WHERE es_tm);
 
 INSERT INTO movilidad.estacion_sitp (codigo, nodo_id, nombre, distancia_acceso, geom)
 SELECT p.stop_id, n.id, p.stop_name, n.d, p.geom
-FROM crudo.gtfs_parada p
+FROM staging.gtfs_parada p
 JOIN LATERAL (SELECT nr.id, ST_Distance(nr.geom, p.geom) AS d FROM movilidad.nodo_red nr
               ORDER BY nr.geom <-> p.geom LIMIT 1) n ON n.d <= 200
 WHERE p.stop_id IN (SELECT stop_id FROM _parada_tipo WHERE NOT es_tm);
@@ -59,23 +59,23 @@ CREATE TABLE movilidad.ruta_estacion_sitp (
 -- El nombre corto puede repetirse entre agencias; el codigo lleva el route_id.
 INSERT INTO movilidad.ruta_transmilenio (codigo, nombre, route_id, geom)
 SELECT r.route_short_name || '#' || r.route_id, r.route_long_name, r.route_id, r.geom
-FROM crudo.gtfs_ruta r
+FROM staging.gtfs_ruta r
 WHERE r.agency_id IN ('1', '2', '6', '7')
-  AND EXISTS (SELECT 1 FROM crudo.gtfs_ruta_parada rp JOIN movilidad.estacion_transmilenio e ON e.codigo = rp.stop_id
+  AND EXISTS (SELECT 1 FROM staging.gtfs_ruta_parada rp JOIN movilidad.estacion_transmilenio e ON e.codigo = rp.stop_id
               WHERE rp.route_id = r.route_id);
 INSERT INTO movilidad.ruta_sitp (codigo, nombre, route_id, geom)
 SELECT r.route_short_name || '#' || r.route_id, r.route_long_name, r.route_id, r.geom
-FROM crudo.gtfs_ruta r
+FROM staging.gtfs_ruta r
 WHERE r.agency_id NOT IN ('1', '2', '6', '7')
-  AND EXISTS (SELECT 1 FROM crudo.gtfs_ruta_parada rp JOIN movilidad.estacion_sitp e ON e.codigo = rp.stop_id
+  AND EXISTS (SELECT 1 FROM staging.gtfs_ruta_parada rp JOIN movilidad.estacion_sitp e ON e.codigo = rp.stop_id
               WHERE rp.route_id = r.route_id);
 
 INSERT INTO movilidad.ruta_estacion_tm
-SELECT rt.id, e.id, rp.orden FROM crudo.gtfs_ruta_parada rp
+SELECT rt.id, e.id, rp.orden FROM staging.gtfs_ruta_parada rp
 JOIN movilidad.ruta_transmilenio rt ON rt.route_id = rp.route_id
 JOIN movilidad.estacion_transmilenio e ON e.codigo = rp.stop_id;
 INSERT INTO movilidad.ruta_estacion_sitp
-SELECT rt.id, e.id, rp.orden FROM crudo.gtfs_ruta_parada rp
+SELECT rt.id, e.id, rp.orden FROM staging.gtfs_ruta_parada rp
 JOIN movilidad.ruta_sitp rt ON rt.route_id = rp.route_id
 JOIN movilidad.estacion_sitp e ON e.codigo = rp.stop_id;
 

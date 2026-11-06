@@ -10,7 +10,7 @@ CREATE TABLE social.estrato (
 INSERT INTO social.estrato (manzana_id, estrato, fecha_captura)
 SELECT DISTINCT ON (m.id) m.id, e.estrato, e.fecha_captura
 FROM territorio.manzana m
-JOIN crudo.estrato_poligono e ON ST_Intersects(m.geom, e.geom)
+JOIN staging.estrato_poligono e ON ST_Intersects(m.geom, e.geom)
 ORDER BY m.id, ST_Area(ST_Intersection(m.geom, e.geom)) DESC;
 
 -- No hay poblacion publicada a nivel manzana ni tamano de hogar. La demanda de cada predio se asume

@@ -52,6 +52,7 @@ services:
     volumes:
       - ./Scripts:/app/Scripts:ro,Z
       - ./SIG:/app/SIG:Z
+      - ./docs:/app/docs:Z
       - ./Backup:/app/Backup:Z
       - cache:/cache
 
